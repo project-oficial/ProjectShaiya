@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{9B3F4A56-3C42-4D21-9876-123456789ABC}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>ShaiyaOverlay</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)Bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Obj\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)Bin\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Obj\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <PreprocessorDefinitions>_DEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source;$(ProjectDir)Source\ThirdParty\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>d3d9.lib;d3d11.lib;dxgi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PreprocessorDefinitions>NDEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <Optimization>MaxSpeed</Optimization>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source;$(ProjectDir)Source\ThirdParty\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>d3d9.lib;d3d11.lib;dxgi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\Core\Types.h" />
+    <ClInclude Include="Source\Core\Logger.h" />
+    <ClInclude Include="Source\Core\StringUtils.h" />
+    <ClInclude Include="Source\Core\Memory.h" />
+    <ClInclude Include="Source\Core\PatternScanner.h" />
+    <ClInclude Include="Source\Core\Camera.h" />
+    <ClInclude Include="Source\Hooks\HookManager.h" />
+    <ClInclude Include="Source\Hooks\D3D9Hook.h" />
+    <ClInclude Include="Source\Hooks\D3D11Hook.h" />
+    <ClInclude Include="Source\Hooks\WndProcHook.h" />
+    <ClInclude Include="Source\Game\GameOffsets.h" />
+    <ClInclude Include="Source\Game\Entities\Entity.h" />
+    <ClInclude Include="Source\Game\Entities\LocalPlayer.h" />
+    <ClInclude Include="Source\Game\Entities\EntityManager.h" />
+    <ClInclude Include="Source\Game\Skills\Skill.h" />
+    <ClInclude Include="Source\Game\Skills\SkillManager.h" />
+    <ClInclude Include="Source\Game\Items\GroundItem.h" />
+    <ClInclude Include="Source\Game\Items\GroundItemManager.h" />
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h" />
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h" />
+    <ClInclude Include="Source\Game\Quests\Quest.h" />
+    <ClInclude Include="Source\Game\Quests\QuestManager.h" />
+    <ClInclude Include="Source\Game\Navigation\NavigationManager.h" />
+    <ClInclude Include="Source\Game\Buffs\Buff.h" />
+    <ClInclude Include="Source\Game\Buffs\BuffManager.h" />
+    <ClInclude Include="Source\Game\Combat\RiskCalculator.h" />
+    <ClInclude Include="Source\UI\Renderer.h" />
+    <ClInclude Include="Source\UI\Menu.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imconfig.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_internal.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_rectpack.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_textedit.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_truetype.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\Core\Logger.cpp" />
+    <ClCompile Include="Source\Core\StringUtils.cpp" />
+    <ClCompile Include="Source\Core\Memory.cpp" />
+    <ClCompile Include="Source\Core\PatternScanner.cpp" />
+    <ClCompile Include="Source\Core\Camera.cpp" />
+    <ClCompile Include="Source\Core\DllMain.cpp" />
+    <ClCompile Include="Source\Hooks\HookManager.cpp" />
+    <ClCompile Include="Source\Hooks\D3D9Hook.cpp" />
+    <ClCompile Include="Source\Hooks\D3D11Hook.cpp" />
+    <ClCompile Include="Source\Hooks\WndProcHook.cpp" />
+    <ClCompile Include="Source\Game\GameOffsets.cpp" />
+    <ClCompile Include="Source\Game\Entities\EntityManager.cpp" />
+    <ClCompile Include="Source\Game\Skills\SkillManager.cpp" />
+    <ClCompile Include="Source\Game\Items\GroundItemManager.cpp" />
+    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp" />
+    <ClCompile Include="Source\Game\Quests\QuestManager.cpp" />
+    <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp" />
+    <ClCompile Include="Source\Game\Buffs\BuffManager.cpp" />
+    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp" />
+    <ClCompile Include="Source\UI\Renderer.cpp" />
+    <ClCompile Include="Source\UI\Menu.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_draw.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_tables.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_widgets.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

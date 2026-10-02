@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Source\Core">
+      <UniqueIdentifier>{A1B2C3D4-0001-4000-8000-000000000001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Hooks">
+      <UniqueIdentifier>{A1B2C3D4-0002-4000-8000-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Entities">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000010}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Skills">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000020}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Items">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000025}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\QuickSlots">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000028}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Quests">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000029}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Navigation">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000035}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Buffs">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000030}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Combat">
+      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000040}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\UI">
+      <UniqueIdentifier>{A1B2C3D4-0004-4000-8000-000000000004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\ThirdParty">
+      <UniqueIdentifier>{A1B2C3D4-0005-4000-8000-000000000005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\ThirdParty\ImGui">
+      <UniqueIdentifier>{A1B2C3D4-0006-4000-8000-000000000006}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\Core\Types.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Logger.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\StringUtils.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Memory.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\PatternScanner.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Camera.h">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\HookManager.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\D3D9Hook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\D3D11Hook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\WndProcHook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\GameOffsets.h">
+      <Filter>Source\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\Entity.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\LocalPlayer.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\EntityManager.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Skills\Skill.h">
+      <Filter>Source\Game\Skills</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Skills\SkillManager.h">
+      <Filter>Source\Game\Skills</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Items\GroundItem.h">
+      <Filter>Source\Game\Items</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Items\GroundItemManager.h">
+      <Filter>Source\Game\Items</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Quests\Quest.h">
+      <Filter>Source\Game\Quests</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Quests\QuestManager.h">
+      <Filter>Source\Game\Quests</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Navigation\NavigationManager.h">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Buffs\Buff.h">
+      <Filter>Source\Game\Buffs</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Buffs\BuffManager.h">
+      <Filter>Source\Game\Buffs</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Combat\RiskCalculator.h">
+      <Filter>Source\Game\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UI\Renderer.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UI\Menu.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imconfig.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_internal.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_rectpack.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_textedit.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imstb_truetype.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\Core\Logger.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\StringUtils.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\Memory.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\PatternScanner.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\Camera.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\DllMain.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\HookManager.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\D3D9Hook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\D3D11Hook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\WndProcHook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\GameOffsets.cpp">
+      <Filter>Source\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Entities\EntityManager.cpp">
+      <Filter>Source\Game\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Skills\SkillManager.cpp">
+      <Filter>Source\Game\Skills</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Items\GroundItemManager.cpp">
+      <Filter>Source\Game\Items</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Quests\QuestManager.cpp">
+      <Filter>Source\Game\Quests</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Buffs\BuffManager.cpp">
+      <Filter>Source\Game\Buffs</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp">
+      <Filter>Source\Game\Combat</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UI\Renderer.cpp">
+      <Filter>Source\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UI\Menu.cpp">
+      <Filter>Source\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_draw.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_tables.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_widgets.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
