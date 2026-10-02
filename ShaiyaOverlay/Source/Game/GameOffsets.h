@@ -27,6 +27,8 @@ namespace ShaiyaOverlay
         U64 SetActionAddr;
         U64 SendMovePacketAddr;
         U64 KeyBuffer;
+        U64 CheckLineOfSightAddr;
+        U64 GetGroundHeightAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;

@@ -1,5 +1,6 @@
 #include "PatternScanner.h"
 #include "Memory.h"
+#include <string.h>
 
 namespace ShaiyaOverlay
 {
@@ -65,10 +66,21 @@ namespace ShaiyaOverlay
         const U8* Base = reinterpret_cast<const U8*>(StartAddress);
         U64 ScanEnd = Size - Pattern.Length;
 
+        U8 FirstByte = Pattern.Bytes[0];
+        bool HasFirst = Pattern.Mask[0];
+
         for (U64 I = 0; I <= ScanEnd; ++I)
         {
+            if (HasFirst && Base[I] != FirstByte)
+            {
+                const void* Next = memchr(Base + I, FirstByte, ScanEnd - I + 1);
+                if (!Next)
+                    break;
+                I = static_cast<const U8*>(Next) - Base;
+            }
+
             bool Found = true;
-            for (U32 J = 0; J < Pattern.Length; ++J)
+            for (U32 J = 1; J < Pattern.Length; ++J)
             {
                 if (Pattern.Mask[J] && Base[I + J] != Pattern.Bytes[J])
                 {

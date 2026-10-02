@@ -25,9 +25,13 @@ namespace ShaiyaOverlay
             Logger::Info("HookManager: WndProcHook initialized.");
         }
 
-        // Initialize graphics hooks
-        bool D3D9Ok = D3D9Hook::Initialize();
+        // Initialize graphics hooks (try D3D11 first; only fallback to D3D9 if D3D11 is not available)
         bool D3D11Ok = D3D11Hook::Initialize();
+        bool D3D9Ok = false;
+        if (!D3D11Ok)
+        {
+            D3D9Ok = D3D9Hook::Initialize();
+        }
 
         if (!D3D9Ok && !D3D11Ok)
         {

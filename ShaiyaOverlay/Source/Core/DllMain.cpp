@@ -3,6 +3,7 @@
 #include "Hooks/HookManager.h"
 #include "Hooks/WndProcHook.h"
 #include "Game/GameOffsets.h"
+#include "Core/MCPTool/MCPBridge.h"
 
 namespace ShaiyaOverlay
 {
@@ -29,6 +30,10 @@ namespace ShaiyaOverlay
 
         Logger::Info("Overlay active! Press [INSERT] to toggle UI, [END] to unload.");
 
+#ifdef MCP_TOOL
+        MCPBridge::StartServer();
+#endif
+
         while (!WndProcHook::ShouldUnload())
         {
             // Global key polling fallback only for emergency unload if game window lost focus
@@ -42,6 +47,10 @@ namespace ShaiyaOverlay
         }
 
         Logger::Info("Unload requested. Cleaning up resources...");
+
+#ifdef MCP_TOOL
+        MCPBridge::StopServer();
+#endif
 
         HookManager::Uninitialize();
         Logger::Info("Shutdown complete. Ejecting DLL...");

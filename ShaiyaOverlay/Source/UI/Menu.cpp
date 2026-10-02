@@ -1,6 +1,7 @@
 #include "Menu.h"
 #include "Core/StringUtils.h"
 #include "Core/Camera.h"
+#include "Core/Logger.h"
 #include "Hooks/WndProcHook.h"
 #include "ThirdParty/ImGui/imgui.h"
 #include "Game/Entities/EntityManager.h"
@@ -11,6 +12,7 @@
 #include "Game/QuickSlots/QuickSlotManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include "Core/MCPTool/MCPBridge.h"
 
 namespace ShaiyaOverlay
 {
@@ -30,6 +32,23 @@ namespace ShaiyaOverlay
 
     void Menu::Render()
     {
+        // Polling fallback only if WndProc hook is not attached
+        if (!WndProcHook::IsAttached())
+        {
+            static bool InsertWasDown = false;
+            bool insertDown = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
+            if (insertDown && !InsertWasDown)
+            {
+                WndProcHook::ToggleMenu();
+                Logger::Info("Menu: Toggled via INSERT key fallback. State: %s", WndProcHook::IsMenuOpen() ? "OPEN" : "CLOSED");
+            }
+            InsertWasDown = insertDown;
+        }
+
+#ifdef MCP_TOOL
+        MCPBridge::OnRenderTick();
+#endif
+
         // Update game states synchronously on render tick
         EntityManager::Update();
         SkillManager::Update();
@@ -988,23 +1007,60 @@ namespace ShaiyaOverlay
             }
         }
 
-        // 3. Draw active auto-walk line if actively navigating
+        // 3. Draw active auto-walk path if actively navigating
         if (NavigationManager::IsNavigating())
         {
-            Vector2 ScreenPos;
-            if (Camera::WorldToScreen(NavigationManager::GetTargetPosition(), ScreenPos, ScreenW, ScreenH))
+            U32 wpCount = NavigationManager::GetWaypointCount();
+            U32 curWpIdx = NavigationManager::GetCurrentWaypointIndex();
+            const Vector3* wps = NavigationManager::GetWaypoints();
+
+            ImU32 Color = IM_COL32(0, 255, 255, 255); // Bright cyan for active walk
+            ImVec2 lastScreenPt = ScreenOrigin;
+
+            if (wpCount > 0 && curWpIdx < wpCount)
             {
-                ImVec2 TargetPos(ScreenPos.X, ScreenPos.Y);
-                ImU32 Color = IM_COL32(0, 255, 255, 255); // Bright cyan for active walk
+                for (U32 i = curWpIdx; i < wpCount; ++i)
+                {
+                    Vector2 wpScreen;
+                    if (Camera::WorldToScreen(wps[i], wpScreen, ScreenW, ScreenH))
+                    {
+                        ImVec2 currentPt(wpScreen.X, wpScreen.Y);
+                        DrawList->AddLine(lastScreenPt, currentPt, Color, 2.5f);
 
-                DrawList->AddLine(ScreenOrigin, TargetPos, Color, 3.0f);
-                DrawList->AddCircle(TargetPos, 16.0f, Color, 20, 2.5f);
-                DrawList->AddCircleFilled(TargetPos, 6.0f, Color);
+                        if (i == wpCount - 1)
+                        {
+                            DrawList->AddCircle(currentPt, 16.0f, Color, 20, 2.5f);
+                            DrawList->AddCircleFilled(currentPt, 6.0f, Color);
 
-                char Label[96];
-                StringUtils::Format(Label, sizeof(Label), ">> [WALKING TO] %s (%.1fm)",
-                    NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());
-                DrawList->AddText(ImVec2(TargetPos.x + 18.0f, TargetPos.y - 8.0f), Color, Label);
+                            char Label[96];
+                            StringUtils::Format(Label, sizeof(Label), ">> [WALKING TO] %s (%.1fm)",
+                                NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());
+                            DrawList->AddText(ImVec2(currentPt.x + 18.0f, currentPt.y - 8.0f), Color, Label);
+                        }
+                        else
+                        {
+                            DrawList->AddCircleFilled(currentPt, 4.0f, Color);
+                        }
+
+                        lastScreenPt = currentPt;
+                    }
+                }
+            }
+            else
+            {
+                Vector2 ScreenPos;
+                if (Camera::WorldToScreen(NavigationManager::GetTargetPosition(), ScreenPos, ScreenW, ScreenH))
+                {
+                    ImVec2 TargetPos(ScreenPos.X, ScreenPos.Y);
+                    DrawList->AddLine(ScreenOrigin, TargetPos, Color, 3.0f);
+                    DrawList->AddCircle(TargetPos, 16.0f, Color, 20, 2.5f);
+                    DrawList->AddCircleFilled(TargetPos, 6.0f, Color);
+
+                    char Label[96];
+                    StringUtils::Format(Label, sizeof(Label), ">> [WALKING TO] %s (%.1fm)",
+                        NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());
+                    DrawList->AddText(ImVec2(TargetPos.x + 18.0f, TargetPos.y - 8.0f), Color, Label);
+                }
             }
         }
     }

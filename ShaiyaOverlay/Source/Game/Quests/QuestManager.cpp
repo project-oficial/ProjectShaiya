@@ -4,6 +4,7 @@
 #include "Game/GameOffsets.h"
 #include "Game/Entities/EntityManager.h"
 #include "Game/Items/GroundItemManager.h"
+#include "Game/Navigation/NavigationManager.h"
 
 namespace ShaiyaOverlay
 {
@@ -116,6 +117,9 @@ namespace ShaiyaOverlay
                 Memory::ReadSafe(NpcRec + 44, &OutPos.X);
                 Memory::ReadSafe(NpcRec + 48, &OutPos.Y);
                 Memory::ReadSafe(NpcRec + 52, &OutPos.Z);
+                F32 GroundY = NavigationManager::GetGroundHeight(OutPos.X, OutPos.Z);
+                if (GroundY != 0.0f)
+                    OutPos.Y = GroundY;
                 return true;
             }
         }
@@ -406,7 +410,9 @@ namespace ShaiyaOverlay
                 Marker.QuestId = Qid;
                 Marker.Position.X = Fx;
                 Marker.Position.Z = Fz;
-                Marker.Position.Y = Player.Valid ? Player.Position.Y : 100.0f;
+                Marker.Position.Y = NavigationManager::GetGroundHeight(Fx, Fz);
+                if (Marker.Position.Y == 0.0f && Player.Valid)
+                    Marker.Position.Y = Player.Position.Y;
                 StringUtils::Copy(Marker.NpcName, Marker.IsTurnIn ? "Turn-in NPC" : "Quest NPC", sizeof(Marker.NpcName));
 
                 for (U32 N = 0; N < LiveNpcs.GetCount(); ++N)

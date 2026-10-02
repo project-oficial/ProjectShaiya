@@ -3,6 +3,7 @@
 #include "Core/StringUtils.h"
 #include "Core/Logger.h"
 #include "Game/GameOffsets.h"
+#include <cmath>
 
 namespace ShaiyaOverlay
 {
@@ -13,7 +14,17 @@ namespace ShaiyaOverlay
     char NavigationManager::DestinationName[64] = { 0 };
     U32 NavigationManager::LastPacketTick = 0;
 
+    Vector3 NavigationManager::Waypoints[32] = { 0 };
+    U32 NavigationManager::WaypointCount = 0;
+    U32 NavigationManager::CurrentWaypointIndex = 0;
+
+    Vector3 NavigationManager::LastStuckCheckPos = { 0 };
+    U32 NavigationManager::LastStuckCheckTick = 0;
+
     static bool KeyIsDown = false;
+
+    typedef bool (__fastcall* tCheckLineOfSight)(U64 WorldMgr, const float* StartPos, const float* EndPos);
+    typedef float (__fastcall* tGetGroundHeight)(U64 WorldMgr, float X, float Z);
 
     static HWND GetGameHwnd()
     {
@@ -26,9 +37,465 @@ namespace ShaiyaOverlay
         return FindWindowA("SDL_app", nullptr);
     }
 
+    bool NavigationManager::CheckLineOfSight(const Vector3& Start, const Vector3& End)
+    {
+        if (!Offsets.CheckLineOfSightAddr || !Offsets.WorldManager)
+            return true;
+
+        auto Fn = reinterpret_cast<tCheckLineOfSight>(Offsets.CheckLineOfSightAddr);
+        float StartBuf[3] = { Start.X, Start.Y, Start.Z };
+        float EndBuf[3]   = { End.X,   End.Y,   End.Z };
+
+        return Fn(Offsets.WorldManager, StartBuf, EndBuf);
+    }
+
+    F32 NavigationManager::GetGroundHeight(F32 X, F32 Z)
+    {
+        if (!Offsets.GetGroundHeightAddr || !Offsets.WorldManager)
+            return 0.0f;
+
+        auto Fn = reinterpret_cast<tGetGroundHeight>(Offsets.GetGroundHeightAddr);
+        return Fn(Offsets.WorldManager, X, Z);
+    }
+
+    bool NavigationManager::CheckWalkableClearance(const Vector3& Start, const Vector3& End, F32 Radius)
+    {
+        // 1. Center ray
+        if (!CheckLineOfSight(Start, End))
+            return false;
+
+        if (Radius <= 0.1f)
+            return true;
+
+        F32 Dx = End.X - Start.X;
+        F32 Dz = End.Z - Start.Z;
+        F32 Len = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+        if (Len < 0.1f)
+            return true;
+
+        // Perpendicular horizontal unit vector for corridor clearance
+        F32 InvLen = 1.0f / Len;
+        F32 PerpX = -Dz * InvLen * Radius;
+        F32 PerpZ =  Dx * InvLen * Radius;
+
+        // 2. Left shoulder ray (check sideways clearance relative to center track)
+        Vector3 LeftStart = { Start.X + PerpX, Start.Y, Start.Z + PerpZ };
+        LeftStart.Y = GetGroundHeight(LeftStart.X, LeftStart.Z);
+        Vector3 LeftEnd = { End.X + PerpX, End.Y, End.Z + PerpZ };
+        LeftEnd.Y = GetGroundHeight(LeftEnd.X, LeftEnd.Z);
+
+        if (fabsf(LeftStart.Y - Start.Y) > 1.5f || fabsf(LeftEnd.Y - End.Y) > 1.5f || !CheckLineOfSight(LeftStart, LeftEnd))
+            return false;
+
+        // 3. Right shoulder ray (check sideways clearance relative to center track)
+        Vector3 RightStart = { Start.X - PerpX, Start.Y, Start.Z - PerpZ };
+        RightStart.Y = GetGroundHeight(RightStart.X, RightStart.Z);
+        Vector3 RightEnd = { End.X - PerpX, End.Y, End.Z - PerpZ };
+        RightEnd.Y = GetGroundHeight(RightEnd.X, RightEnd.Z);
+
+        if (fabsf(RightStart.Y - Start.Y) > 1.5f || fabsf(RightEnd.Y - End.Y) > 1.5f || !CheckLineOfSight(RightStart, RightEnd))
+            return false;
+
+        return true;
+    }
+
+    bool NavigationManager::IsSegmentWalkable(const Vector3& Start, const Vector3& End)
+    {
+        F32 Dx = End.X - Start.X;
+        F32 Dz = End.Z - Start.Z;
+        F32 Dist = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+        if (Dist < 0.1f)
+            return true;
+
+        // Overall slope check: reject slopes steeper than 0.70 (~35 degrees uphill) or 0.85 (cliff drop)
+        F32 deltaY = End.Y - Start.Y;
+        if (deltaY > 0.0f && (deltaY / Dist) > 0.70f)
+            return false;
+        if (deltaY < 0.0f && (-deltaY / Dist) > 0.85f)
+            return false;
+
+        // Width clearance corridor check (0.65m radius = 1.3m clear corridor)
+        if (!CheckWalkableClearance(Start, End, 0.65f))
+            return false;
+
+        // Sample intermediate terrain elevation every 3.0 meters along the line
+        int numSamples = static_cast<int>(Dist / 3.0f);
+        if (numSamples < 2 && Dist > 3.0f) numSamples = 2;
+        if (numSamples > 8) numSamples = 8;
+
+        F32 prevY = Start.Y;
+        F32 sampleStep = Dist / static_cast<F32>(numSamples + 1);
+
+        for (int s = 1; s <= numSamples; ++s)
+        {
+            F32 t = static_cast<F32>(s) / static_cast<F32>(numSamples + 1);
+            F32 sx = Start.X + Dx * t;
+            F32 sz = Start.Z + Dz * t;
+            F32 actualY = GetGroundHeight(sx, sz);
+
+            // Slope between consecutive samples (prevents crossing vertical cliffs >40 deg)
+            F32 stepSlope = (actualY - prevY) / sampleStep;
+            if (stepSlope > 0.75f || stepSlope < -0.85f)
+                return false;
+
+            F32 expectedY = Start.Y + (End.Y - Start.Y) * t;
+
+            // Reject terrain crests that bulge >1.5m above line
+            if ((actualY - expectedY) > 1.5f)
+                return false;
+
+            // Reject ditches/drops that sink >2.5m below line
+            if ((expectedY - actualY) > 2.5f)
+                return false;
+
+            prevY = actualY;
+        }
+
+        return true;
+    }
+
+    struct AStarCell
+    {
+        F32 gCost;
+        F32 fCost;
+        I16 parentX;
+        I16 parentZ;
+        U8 state; // 0 = unvisited, 1 = open, 2 = closed, 3 = blocked
+    };
+
+    struct HeapNode
+    {
+        I16 x, z;
+        F32 fCost;
+    };
+
+    U32 NavigationManager::BuildPath(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints)
+    {
+        if (!OutWaypoints || MaxWaypoints == 0)
+            return 0;
+
+        Vector3 AdjustedGoal = Goal;
+        F32 GoalGroundY = GetGroundHeight(AdjustedGoal.X, AdjustedGoal.Z);
+        if (GoalGroundY != 0.0f)
+            AdjustedGoal.Y = GoalGroundY;
+
+        Vector3 AdjustedStart = Start;
+        F32 StartGroundY = GetGroundHeight(AdjustedStart.X, AdjustedStart.Z);
+        if (StartGroundY != 0.0f)
+            AdjustedStart.Y = StartGroundY;
+
+        F32 Dx = AdjustedGoal.X - AdjustedStart.X;
+        F32 Dz = AdjustedGoal.Z - AdjustedStart.Z;
+        F32 TotalDist = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+        if (TotalDist < 0.5f)
+        {
+            OutWaypoints[0] = AdjustedGoal;
+            return 1;
+        }
+
+        // Direct line check: if the path to goal is already clear and flat, go directly
+        if (IsSegmentWalkable(AdjustedStart, AdjustedGoal))
+        {
+            OutWaypoints[0] = AdjustedGoal;
+            return 1;
+        }
+
+        // Grid setup: 56x56 grid covers full distance with adaptive cell size
+        const int GridDim = 56;
+        F32 DesiredSpan = TotalDist + 50.0f;
+        F32 CellSize = DesiredSpan / static_cast<F32>(GridDim - 4);
+        if (CellSize < 2.5f) CellSize = 2.5f;
+
+        Vector3 Center = { (AdjustedStart.X + AdjustedGoal.X) * 0.5f,
+                           (AdjustedStart.Y + AdjustedGoal.Y) * 0.5f,
+                           (AdjustedStart.Z + AdjustedGoal.Z) * 0.5f };
+
+        auto WorldToGridX = [&](F32 wx) -> int {
+            int gx = GridDim / 2 + static_cast<int>(floorf((wx - Center.X) / CellSize + 0.5f));
+            return gx < 0 ? 0 : (gx >= GridDim ? GridDim - 1 : gx);
+        };
+        auto WorldToGridZ = [&](F32 wz) -> int {
+            int gz = GridDim / 2 + static_cast<int>(floorf((wz - Center.Z) / CellSize + 0.5f));
+            return gz < 0 ? 0 : (gz >= GridDim ? GridDim - 1 : gz);
+        };
+        auto GridToWorldX = [&](int gx) -> F32 {
+            return Center.X + (gx - GridDim / 2) * CellSize;
+        };
+        auto GridToWorldZ = [&](int gz) -> F32 {
+            return Center.Z + (gz - GridDim / 2) * CellSize;
+        };
+
+        int startGX = WorldToGridX(AdjustedStart.X);
+        int startGZ = WorldToGridZ(AdjustedStart.Z);
+        int goalGX = WorldToGridX(AdjustedGoal.X);
+        int goalGZ = WorldToGridZ(AdjustedGoal.Z);
+
+        static AStarCell Grid[56][56];
+        memset(Grid, 0, sizeof(Grid));
+
+        static HeapNode OpenHeap[2048];
+        int HeapSize = 0;
+
+        auto PushHeap = [&](I16 x, I16 z, F32 f) {
+            if (HeapSize >= 2040) return;
+            int i = HeapSize++;
+            while (i > 0)
+            {
+                int p = (i - 1) / 2;
+                if (OpenHeap[p].fCost <= f) break;
+                OpenHeap[i] = OpenHeap[p];
+                i = p;
+            }
+            OpenHeap[i] = { x, z, f };
+        };
+
+        auto PopHeap = [&]() -> HeapNode {
+            HeapNode top = OpenHeap[0];
+            HeapNode last = OpenHeap[--HeapSize];
+            if (HeapSize > 0)
+            {
+                int i = 0;
+                while (i * 2 + 1 < HeapSize)
+                {
+                    int l = i * 2 + 1;
+                    int r = l + 1;
+                    int s = (r < HeapSize && OpenHeap[r].fCost < OpenHeap[l].fCost) ? r : l;
+                    if (last.fCost <= OpenHeap[s].fCost) break;
+                    OpenHeap[i] = OpenHeap[s];
+                    i = s;
+                }
+                OpenHeap[i] = last;
+            }
+            return top;
+        };
+
+        auto Heuristic = [&](int x1, int z1, int x2, int z2) -> F32 {
+            F32 hx = static_cast<F32>(x1 - x2);
+            F32 hz = static_cast<F32>(z1 - z2);
+            return Vector3::Sqrt(hx * hx + hz * hz) * CellSize;
+        };
+
+        // Goal reached if within 1 cell of goalGX, goalGZ or arrival radius of actual world goal
+        auto IsGoalNode = [&](int gx, int gz) -> bool {
+            if (gx == goalGX && gz == goalGZ) return true;
+            F32 wx = GridToWorldX(gx);
+            F32 wz = GridToWorldZ(gz);
+            F32 ddx = wx - AdjustedGoal.X;
+            F32 ddz = wz - AdjustedGoal.Z;
+            return (ddx * ddx + ddz * ddz) <= (ArrivalRadius * ArrivalRadius);
+        };
+
+        Grid[startGX][startGZ].gCost = 0.0f;
+        Grid[startGX][startGZ].fCost = Heuristic(startGX, startGZ, goalGX, goalGZ);
+        Grid[startGX][startGZ].parentX = -1;
+        Grid[startGX][startGZ].parentZ = -1;
+        Grid[startGX][startGZ].state = 1;
+        PushHeap(static_cast<I16>(startGX), static_cast<I16>(startGZ), Grid[startGX][startGZ].fCost);
+
+        int bestX = startGX;
+        int bestZ = startGZ;
+        F32 bestH = 1e9f;
+        bool found = false;
+
+        const int dx[8] = { 0, 1, 0, -1, 1, -1, 1, -1 };
+        const int dz[8] = { 1, 0, -1, 0, 1, 1, -1, -1 };
+        const F32 costs[8] = {
+            CellSize, CellSize, CellSize, CellSize,
+            1.414f * CellSize, 1.414f * CellSize, 1.414f * CellSize, 1.414f * CellSize
+        };
+
+        int iterations = 0;
+        const int maxIterations = 1500;
+
+        while (HeapSize > 0 && iterations++ < maxIterations)
+        {
+            HeapNode cur = PopHeap();
+            int cx = cur.x;
+            int cz = cur.z;
+
+            if (Grid[cx][cz].state == 2) continue;
+            Grid[cx][cz].state = 2;
+
+            F32 h = Heuristic(cx, cz, goalGX, goalGZ);
+            if (h < bestH)
+            {
+                bestH = h;
+                bestX = cx;
+                bestZ = cz;
+            }
+
+            if (IsGoalNode(cx, cz))
+            {
+                bestX = cx;
+                bestZ = cz;
+                found = true;
+                break;
+            }
+
+            F32 curWX = GridToWorldX(cx);
+            F32 curWZ = GridToWorldZ(cz);
+            F32 curWY = GetGroundHeight(curWX, curWZ);
+            Vector3 curPos = { curWX, curWY, curWZ };
+
+            for (int i = 0; i < 8; ++i)
+            {
+                int nx = cx + dx[i];
+                int nz = cz + dz[i];
+
+                if (nx < 0 || nx >= GridDim || nz < 0 || nz >= GridDim) continue;
+                if (Grid[nx][nz].state == 2 || Grid[nx][nz].state == 3) continue;
+
+                F32 nWX = GridToWorldX(nx);
+                F32 nWZ = GridToWorldZ(nz);
+                F32 nWY = GetGroundHeight(nWX, nWZ);
+
+                // HARD LIMIT: strictly block slopes where player slides or cliffs (uphill > 0.70, downhill > 0.85)
+                F32 stepDist = costs[i];
+                F32 deltaY = nWY - curWY;
+
+                if (deltaY > 0.0f)
+                {
+                    if ((deltaY / stepDist) > 0.70f)
+                    {
+                        Grid[nx][nz].state = 3;
+                        continue;
+                    }
+                }
+                else
+                {
+                    if ((-deltaY / stepDist) > 0.85f)
+                    {
+                        Grid[nx][nz].state = 3;
+                        continue;
+                    }
+                }
+
+                // Width clearance corridor check (0.65m radius)
+                Vector3 nPos = { nWX, nWY, nWZ };
+                if (!CheckWalkableClearance(curPos, nPos, 0.65f))
+                {
+                    Grid[nx][nz].state = 3;
+                    continue;
+                }
+
+                // ELEVATION PENALTY: prefer flat ground (roads and valleys) over steep incline
+                F32 slopePenalty = fabsf(deltaY) * 2.5f;
+                F32 stepCost = stepDist + slopePenalty;
+
+                F32 newG = Grid[cx][cz].gCost + stepCost;
+                if (Grid[nx][nz].state == 0 || newG < Grid[nx][nz].gCost)
+                {
+                    Grid[nx][nz].gCost = newG;
+                    Grid[nx][nz].fCost = newG + Heuristic(nx, nz, goalGX, goalGZ);
+                    Grid[nx][nz].parentX = static_cast<I16>(cx);
+                    Grid[nx][nz].parentZ = static_cast<I16>(cz);
+                    Grid[nx][nz].state = 1;
+                    PushHeap(static_cast<I16>(nx), static_cast<I16>(nz), Grid[nx][nz].fCost);
+                }
+            }
+        }
+
+        // Traceback path
+        int tx = bestX;
+        int tz = bestZ;
+
+        Vector3 RawPath[64];
+        int RawCount = 0;
+
+        if (found || IsGoalNode(bestX, bestZ))
+        {
+            RawPath[RawCount++] = AdjustedGoal;
+        }
+
+        while (tx != -1 && tz != -1 && RawCount < 60)
+        {
+            F32 wx = GridToWorldX(tx);
+            F32 wz = GridToWorldZ(tz);
+            F32 wy = GetGroundHeight(wx, wz);
+            RawPath[RawCount++] = { wx, wy, wz };
+
+            int px = Grid[tx][tz].parentX;
+            int pz = Grid[tx][tz].parentZ;
+            tx = px;
+            tz = pz;
+        }
+
+        if (RawCount <= 0)
+        {
+            OutWaypoints[0] = AdjustedGoal;
+            return 1;
+        }
+
+        // Reverse raw path so it starts at AdjustedStart and ends at AdjustedGoal
+        for (int i = 0; i < RawCount / 2; ++i)
+        {
+            Vector3 tmp = RawPath[i];
+            RawPath[i] = RawPath[RawCount - 1 - i];
+            RawPath[RawCount - 1 - i] = tmp;
+        }
+
+        // Path smoothing (string pulling) with clearance and slope validation
+        Vector3 Smoothed[32];
+        U32 SmoothCount = 0;
+
+        Smoothed[SmoothCount++] = AdjustedStart;
+
+        int curIdx = 0;
+        while (curIdx < RawCount - 1 && SmoothCount < MaxWaypoints - 1)
+        {
+            int farthest = curIdx + 1;
+            for (int test = RawCount - 1; test > curIdx + 1; --test)
+            {
+                if (IsSegmentWalkable(Smoothed[SmoothCount - 1], RawPath[test]))
+                {
+                    farthest = test;
+                    break;
+                }
+            }
+            Smoothed[SmoothCount++] = RawPath[farthest];
+            curIdx = farthest;
+        }
+
+        // Ensure AdjustedGoal is connected if reachable or goal was reached
+        if (found || IsGoalNode(bestX, bestZ) || CheckLineOfSight(Smoothed[SmoothCount - 1], AdjustedGoal))
+        {
+            F32 FinalDistToGoal = Smoothed[SmoothCount - 1].DistanceTo(AdjustedGoal);
+            if (FinalDistToGoal <= 2.5f || CheckLineOfSight(Smoothed[SmoothCount - 1], AdjustedGoal))
+            {
+                Smoothed[SmoothCount - 1] = AdjustedGoal;
+            }
+            else if (SmoothCount < MaxWaypoints)
+            {
+                Smoothed[SmoothCount++] = AdjustedGoal;
+            }
+        }
+
+        // Copy out (skipping index 0 which is Start position)
+        U32 FinalCount = 0;
+        for (U32 i = 1; i < SmoothCount && FinalCount < MaxWaypoints; ++i)
+        {
+            F32 gy = GetGroundHeight(Smoothed[i].X, Smoothed[i].Z);
+            if (gy != 0.0f)
+                Smoothed[i].Y = gy;
+            OutWaypoints[FinalCount++] = Smoothed[i];
+        }
+
+        if (FinalCount == 0)
+        {
+            OutWaypoints[0] = AdjustedGoal;
+            FinalCount = 1;
+        }
+
+        return FinalCount;
+    }
+
     void NavigationManager::WalkTo(const Vector3& Target, const char* TargetName, F32 StopDistance)
     {
         TargetPos = Target;
+        F32 GroundY = GetGroundHeight(TargetPos.X, TargetPos.Z);
+        if (GroundY != 0.0f)
+            TargetPos.Y = GroundY;
+
         ArrivalRadius = StopDistance > 1.0f ? StopDistance : 1.5f;
         Active = true;
         LastPacketTick = 0;
@@ -36,10 +503,27 @@ namespace ShaiyaOverlay
         if (TargetName && TargetName[0] != '\0')
             StringUtils::Copy(DestinationName, TargetName, sizeof(DestinationName));
         else
-            StringUtils::Format(DestinationName, sizeof(DestinationName), "Pos (%.0f, %.0f)", Target.X, Target.Z);
+            StringUtils::Format(DestinationName, sizeof(DestinationName), "Pos (%.0f, %.0f)", TargetPos.X, TargetPos.Z);
 
         Logger::Info("Navigation: Auto-walk started to %s at (%.1f, %.1f, %.1f)",
-            DestinationName, Target.X, Target.Y, Target.Z);
+            DestinationName, TargetPos.X, TargetPos.Y, TargetPos.Z);
+
+        // Read player start position
+        Vector3 StartPos = TargetPos;
+        U64 LocalPlayerPtr = 0;
+        if (Offsets.WorldManager && Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
+        {
+            Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosX, &StartPos.X);
+            Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosY, &StartPos.Y);
+            Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosZ, &StartPos.Z);
+        }
+
+        WaypointCount = BuildPath(StartPos, TargetPos, Waypoints, 32);
+        CurrentWaypointIndex = 0;
+        LastStuckCheckPos = StartPos;
+        LastStuckCheckTick = GetTickCount();
+
+        Logger::Info("Navigation: Path generated with %u waypoints.", WaypointCount);
 
         HWND Hwnd = GetGameHwnd();
         if (Hwnd)
@@ -50,7 +534,8 @@ namespace ShaiyaOverlay
 
         if (Offsets.KeyBuffer)
         {
-            *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x11) = 0x80;
+            UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
             KeyIsDown = true;
         }
     }
@@ -62,6 +547,8 @@ namespace ShaiyaOverlay
 
         Active = false;
         RemainingDistance = 0.0f;
+        WaypointCount = 0;
+        CurrentWaypointIndex = 0;
 
         HWND Hwnd = GetGameHwnd();
         if (Hwnd && KeyIsDown)
@@ -71,7 +558,8 @@ namespace ShaiyaOverlay
 
         if (Offsets.KeyBuffer)
         {
-            *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x11) = 0x00;
+            UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x00;
         }
 
         KeyIsDown = false;
@@ -123,11 +611,12 @@ namespace ShaiyaOverlay
             return;
         }
 
-        F32 Dx = TargetPos.X - CurPos.X;
-        F32 Dz = TargetPos.Z - CurPos.Z;
-        RemainingDistance = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+        // Remaining distance to ultimate goal
+        F32 TotalDx = TargetPos.X - CurPos.X;
+        F32 TotalDz = TargetPos.Z - CurPos.Z;
+        RemainingDistance = Vector3::Sqrt(TotalDx * TotalDx + TotalDz * TotalDz);
 
-        // Check if arrived at destination
+        // Check if arrived at final destination
         if (RemainingDistance <= ArrivalRadius)
         {
             Logger::Info("Navigation: Arrived at %s! Distance: %.1fm", DestinationName, RemainingDistance);
@@ -135,11 +624,83 @@ namespace ShaiyaOverlay
             return;
         }
 
-        F32 InvLen = 1.0f / RemainingDistance;
+        // Dynamic stuck/sliding recovery (only if player is completely immobile for 2.5s)
+        U32 Now = GetTickCount();
+        if (Now - LastStuckCheckTick > 2500)
+        {
+            F32 MovedDx = CurPos.X - LastStuckCheckPos.X;
+            F32 MovedDz = CurPos.Z - LastStuckCheckPos.Z;
+            F32 MovedDist = Vector3::Sqrt(MovedDx * MovedDx + MovedDz * MovedDz);
+
+            if (MovedDist < 0.20f)
+            {
+                Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s). Re-routing...", MovedDist);
+
+                // Release key briefly to stop momentum/sliding
+                if (Offsets.KeyBuffer)
+                {
+                    UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x00;
+                }
+                if (Hwnd && KeyIsDown)
+                {
+                    PostMessageA(Hwnd, WM_KEYUP, 'W', 1 | (0x11 << 16) | (1 << 30) | (1 << 31));
+                    KeyIsDown = false;
+                }
+
+                WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 32);
+                CurrentWaypointIndex = 0;
+            }
+
+            LastStuckCheckPos = CurPos;
+            LastStuckCheckTick = Now;
+        }
+
+        // Ensure valid waypoint target
+        if (WaypointCount == 0 || CurrentWaypointIndex >= WaypointCount)
+        {
+            WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 32);
+            CurrentWaypointIndex = 0;
+            if (WaypointCount == 0)
+            {
+                Stop();
+                return;
+            }
+        }
+
+        Vector3 CurrentTarget = Waypoints[CurrentWaypointIndex];
+        bool isFinalWaypoint = (CurrentWaypointIndex == WaypointCount - 1);
+
+        F32 Dx = CurrentTarget.X - CurPos.X;
+        F32 Dz = CurrentTarget.Z - CurPos.Z;
+        F32 DistToWaypoint = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+
+        if (!isFinalWaypoint)
+        {
+            // Advance to next waypoint if within 2.2m or if player has passed the waypoint plane
+            Vector3 PrevPt = (CurrentWaypointIndex == 0) ? CurPos : Waypoints[CurrentWaypointIndex - 1];
+            F32 SegX = CurrentTarget.X - PrevPt.X;
+            F32 SegZ = CurrentTarget.Z - PrevPt.Z;
+            F32 DotPast = (CurPos.X - CurrentTarget.X) * SegX + (CurPos.Z - CurrentTarget.Z) * SegZ;
+
+            if (DistToWaypoint <= 2.2f || (DistToWaypoint <= 4.0f && DotPast > 0.0f))
+            {
+                CurrentWaypointIndex++;
+                CurrentTarget = Waypoints[CurrentWaypointIndex];
+                Dx = CurrentTarget.X - CurPos.X;
+                Dz = CurrentTarget.Z - CurPos.Z;
+                DistToWaypoint = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+            }
+        }
+
+        if (DistToWaypoint < 0.01f)
+            DistToWaypoint = 0.01f;
+
+        F32 InvLen = 1.0f / DistToWaypoint;
         F32 DirX = Dx * InvLen;
         F32 DirZ = Dz * InvLen;
 
-        // Orient camera behind the character looking towards destination
+        // Orient camera behind the character looking towards current waypoint
         if (Offsets.CameraEye)
         {
             F32 LookX = 0.0f;
@@ -178,7 +739,8 @@ namespace ShaiyaOverlay
         // Ensure keydown is maintained directly in memory buffer and via PostMessage fallback
         if (Offsets.KeyBuffer)
         {
-            *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x11) = 0x80;
+            UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
         }
 
         if (Hwnd && !KeyIsDown)

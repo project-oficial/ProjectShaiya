@@ -41,52 +41,25 @@ namespace ShaiyaOverlay
         return TRUE;
     }
 
-    bool WndProcHook::Initialize()
+    bool WndProcHook::AttachToWindow(HWND Hwnd)
     {
-        if (OriginalWndProc != nullptr)
+        if (!Hwnd)
+            return false;
+
+        DWORD WindowPid = 0;
+        GetWindowThreadProcessId(Hwnd, &WindowPid);
+        if (WindowPid != GetCurrentProcessId())
+            return false;
+
+        if (WindowHandle == Hwnd && OriginalWndProc != nullptr)
             return true;
 
-        WindowHandle = nullptr;
-
-        // Method 1: Find SDL window directly
-        WindowHandle = FindWindowA("SDL_app", nullptr);
-        if (WindowHandle)
+        if (OriginalWndProc != nullptr && WindowHandle != nullptr)
         {
-            Logger::Info("WndProcHook: Found window via FindWindowA('SDL_app'): 0x%p", WindowHandle);
+            Uninitialize();
         }
 
-        // Method 2: Read from game global memory
-        if (!WindowHandle)
-        {
-            U64 HwndVal = 0;
-            if (Memory::ReadSafe(Offsets.GameHwnd, &HwndVal) && HwndVal)
-            {
-                WindowHandle = reinterpret_cast<HWND>(HwndVal);
-                Logger::Info("WndProcHook: Found window via GameHwnd: 0x%p", WindowHandle);
-            }
-        }
-
-        // Method 3: EnumWindows fallback
-        if (!WindowHandle)
-        {
-            EnumWindows(EnumWindowsCallback, reinterpret_cast<LPARAM>(&WindowHandle));
-            if (WindowHandle)
-                Logger::Info("WndProcHook: Found window via EnumWindows: 0x%p", WindowHandle);
-        }
-
-        if (!WindowHandle)
-        {
-            WindowHandle = GetActiveWindow();
-            if (WindowHandle)
-                Logger::Info("WndProcHook: Found window via GetActiveWindow: 0x%p", WindowHandle);
-        }
-
-        if (!WindowHandle)
-        {
-            Logger::Error("WndProcHook: Could not locate game window handle!");
-            return false;
-        }
-
+        WindowHandle = Hwnd;
         SetLastError(0);
         if (IsWindowUnicode(WindowHandle))
         {
@@ -105,11 +78,46 @@ namespace ShaiyaOverlay
         if (!OriginalWndProc && Err != 0)
         {
             Logger::Error("WndProcHook: SetWindowLongPtr failed on HWND 0x%p with error code: %lu", WindowHandle, Err);
+            WindowHandle = nullptr;
             return false;
         }
 
         Logger::Info("WndProcHook: Subclassed HWND 0x%p successfully. OriginalWndProc: 0x%p", WindowHandle, OriginalWndProc);
         return true;
+    }
+
+    bool WndProcHook::Initialize()
+    {
+        if (OriginalWndProc != nullptr)
+            return true;
+
+        WindowHandle = nullptr;
+
+        // Priority 1: Read from game global memory (verified to match current PID)
+        if (Offsets.GameHwnd)
+        {
+            U64 HwndVal = 0;
+            if (Memory::ReadSafe(Offsets.GameHwnd, &HwndVal) && HwndVal)
+            {
+                HWND Candidate = reinterpret_cast<HWND>(HwndVal);
+                if (AttachToWindow(Candidate))
+                    return true;
+            }
+        }
+
+        // Priority 2: EnumWindows strictly for current process
+        HWND FoundHwnd = nullptr;
+        EnumWindows(EnumWindowsCallback, reinterpret_cast<LPARAM>(&FoundHwnd));
+        if (FoundHwnd && AttachToWindow(FoundHwnd))
+            return true;
+
+        // Priority 3: Active Window
+        HWND ActiveHwnd = GetActiveWindow();
+        if (ActiveHwnd && AttachToWindow(ActiveHwnd))
+            return true;
+
+        Logger::Error("WndProcHook: Could not locate game window handle during Init (will attach on first Present).");
+        return false;
     }
 
     void WndProcHook::Uninitialize()
@@ -137,8 +145,14 @@ namespace ShaiyaOverlay
         {
             if (WParam == VK_INSERT)
             {
-                MenuOpen = !MenuOpen;
-                Logger::Info("WndProcHook: Menu toggled via INSERT. State: %s", MenuOpen ? "OPEN" : "CLOSED");
+                static DWORD LastToggleTick = 0;
+                DWORD Now = GetTickCount();
+                if (Now - LastToggleTick > 150)
+                {
+                    MenuOpen = !MenuOpen;
+                    LastToggleTick = Now;
+                    Logger::Info("WndProcHook: Menu toggled via INSERT. State: %s", MenuOpen ? "OPEN" : "CLOSED");
+                }
                 return 0;
             }
             else if (WParam == VK_END)

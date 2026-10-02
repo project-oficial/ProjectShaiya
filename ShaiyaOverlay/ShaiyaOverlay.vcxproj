@@ -59,7 +59,7 @@
       <SDLCheck>false</SDLCheck>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>_DEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)Source;$(ProjectDir)Source\ThirdParty\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -79,7 +79,7 @@
       <SDLCheck>false</SDLCheck>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <Optimization>MaxSpeed</Optimization>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -101,6 +101,7 @@
     <ClInclude Include="Source\Core\Memory.h" />
     <ClInclude Include="Source\Core\PatternScanner.h" />
     <ClInclude Include="Source\Core\Camera.h" />
+    <ClInclude Include="Source\Core\MCPTool\MCPBridge.h" />
     <ClInclude Include="Source\Hooks\HookManager.h" />
     <ClInclude Include="Source\Hooks\D3D9Hook.h" />
     <ClInclude Include="Source\Hooks\D3D11Hook.h" />
@@ -140,6 +141,7 @@
     <ClCompile Include="Source\Core\PatternScanner.cpp" />
     <ClCompile Include="Source\Core\Camera.cpp" />
     <ClCompile Include="Source\Core\DllMain.cpp" />
+    <ClCompile Include="Source\Core\MCPTool\MCPBridge.cpp" />
     <ClCompile Include="Source\Hooks\HookManager.cpp" />
     <ClCompile Include="Source\Hooks\D3D9Hook.cpp" />
     <ClCompile Include="Source\Hooks\D3D11Hook.cpp" />

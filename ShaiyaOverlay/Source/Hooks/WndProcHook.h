@@ -10,9 +10,13 @@ namespace ShaiyaOverlay
         static bool Initialize();
         static void Uninitialize();
 
+        static bool AttachToWindow(HWND Hwnd);
+        static bool IsAttached() { return OriginalWndProc != nullptr; }
+
         static HWND GetWindowHandle() { return WindowHandle; }
         static bool IsMenuOpen() { return MenuOpen; }
         static void SetMenuOpen(bool Open) { MenuOpen = Open; }
+        static void ToggleMenu() { MenuOpen = !MenuOpen; }
         static bool ShouldUnload() { return UnloadRequested; }
         static void RequestUnload() { UnloadRequested = true; }
 

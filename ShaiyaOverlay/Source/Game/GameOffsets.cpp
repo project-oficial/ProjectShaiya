@@ -220,5 +220,36 @@ namespace ShaiyaOverlay
         else
             Offsets.KeyBuffer = ImageBase + 0x2FD0F60;
         Logger::Info("  KeyBuffer       : 0x%llX (AOB: %s)", Offsets.KeyBuffer, MatchKeyBuf ? "YES" : "FALLBACK");
+
+        // 19. CheckLineOfSight (sub_1402DA2F0)
+        U64 MatchCheckLOS = PatternScanner::ScanModule(nullptr, "48 8B C4 48 89 58 10 48 89 78 18 55 48 8D 68 A8 48 81 EC 50 01 00 00");
+        Offsets.CheckLineOfSightAddr = MatchCheckLOS ? MatchCheckLOS : (ImageBase + 0x2DA2F0);
+        Logger::Info("  CheckLineOfSight: 0x%llX (AOB: %s)", Offsets.CheckLineOfSightAddr, MatchCheckLOS ? "YES" : "FALLBACK");
+
+        // Silence error sound (ui_error001.wav) and chat spam when CheckLineOfSight hits obstacles
+        if (Offsets.CheckLineOfSightAddr)
+        {
+            U8* PatchPtr = reinterpret_cast<U8*>(Offsets.CheckLineOfSightAddr + 0x1ED);
+            if (PatchPtr[0] == 0xB9 && PatchPtr[1] == 0xC9 && PatchPtr[2] == 0x01)
+            {
+                DWORD OldProtect = 0;
+                if (VirtualProtect(PatchPtr, 5, PAGE_EXECUTE_READWRITE, &OldProtect))
+                {
+                    // EB 36 90 90 90: jmp +0x36 straight to xor eax, eax; jmp loc_1402DB366
+                    PatchPtr[0] = 0xEB;
+                    PatchPtr[1] = 0x36;
+                    PatchPtr[2] = 0x90;
+                    PatchPtr[3] = 0x90;
+                    PatchPtr[4] = 0x90;
+                    VirtualProtect(PatchPtr, 5, OldProtect, &OldProtect);
+                    Logger::Info("  CheckLineOfSight: Silenced UI error sound & chat spam successfully.");
+                }
+            }
+        }
+
+        // 20. GetGroundHeight (sub_14005C320)
+        U64 MatchHeight = PatternScanner::ScanModule(nullptr, "48 8B C4 48 83 EC 58 80 79 09 00 74 72");
+        Offsets.GetGroundHeightAddr = MatchHeight ? MatchHeight : (ImageBase + 0x05C320);
+        Logger::Info("  GetGroundHeight : 0x%llX (AOB: %s)", Offsets.GetGroundHeightAddr, MatchHeight ? "YES" : "FALLBACK");
     }
 }

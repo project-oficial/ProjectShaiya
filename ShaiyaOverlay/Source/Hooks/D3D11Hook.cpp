@@ -201,6 +201,7 @@ namespace ShaiyaOverlay
 
                 CreateRenderTarget(SwapChain);
                 Logger::Info("D3D11 HookedPresent: First frame! OutputWindow: 0x%p", Desc.OutputWindow);
+                WndProcHook::AttachToWindow(Desc.OutputWindow);
 
                 if (Renderer::InitializeD3D11(Desc.OutputWindow, Device, Context))
                 {

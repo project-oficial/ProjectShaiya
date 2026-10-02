@@ -9,6 +9,11 @@ namespace ShaiyaOverlay
     public:
         static void Render();
 
+        static bool IsSnaplinesEnabled() { return SnaplinesEnabled; }
+        static void SetSnaplinesEnabled(bool enabled) { SnaplinesEnabled = enabled; }
+        static bool IsQuestWaypointsEnabled() { return QuestWaypointsEnabled; }
+        static void SetQuestWaypointsEnabled(bool enabled) { QuestWaypointsEnabled = enabled; }
+
     private:
         static void RenderOverviewWindow();
         static void RenderEntitiesWindow();
