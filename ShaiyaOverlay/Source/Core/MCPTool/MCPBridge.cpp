@@ -26,6 +26,7 @@ namespace ShaiyaOverlay
         static volatile bool g_bServerRunning = false;
         static HANDLE g_hPipeThread = nullptr;
         static HANDLE g_hPipe = INVALID_HANDLE_VALUE;
+        static HANDLE g_hShutdownEvent = nullptr;
 
         typedef void (*RenderThreadTaskFn)(void* pContext);
         static volatile RenderThreadTaskFn g_pRenderTask = nullptr;
@@ -1183,6 +1184,8 @@ namespace ShaiyaOverlay
         {
             Logger::Info("[MCP] MCPPipeThread started, listening on \\\\.\\pipe\\ShaiyaOverlay_MCP");
 
+            HANDLE hConnectEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+
             while (g_bServerRunning)
             {
                 SECURITY_DESCRIPTOR sd;
@@ -1196,7 +1199,7 @@ namespace ShaiyaOverlay
 
                 HANDLE hPipe = CreateNamedPipeA(
                     "\\\\.\\pipe\\ShaiyaOverlay_MCP",
-                    PIPE_ACCESS_DUPLEX,
+                    PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                     PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
                     1,
                     65536,
@@ -1209,23 +1212,75 @@ namespace ShaiyaOverlay
                 {
                     DWORD err = GetLastError();
                     Logger::Error("[MCP] Failed to create named pipe, error: %lu", err);
-                    Sleep(2000);
+                    Sleep(1000);
                     continue;
                 }
 
                 g_hPipe = hPipe;
 
-                BOOL connected = ConnectNamedPipe(hPipe, nullptr) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+                OVERLAPPED ov = { 0 };
+                ov.hEvent = hConnectEvent;
+                ResetEvent(hConnectEvent);
+
+                BOOL connected = ConnectNamedPipe(hPipe, &ov);
+                DWORD err = GetLastError();
+
+                if (!connected && err == ERROR_IO_PENDING)
+                {
+                    HANDLE events[2] = { hConnectEvent, g_hShutdownEvent };
+                    DWORD waitRes = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+                    if (waitRes == WAIT_OBJECT_0)
+                    {
+                        connected = TRUE;
+                    }
+                    else
+                    {
+                        CancelIo(hPipe);
+                        CloseHandle(hPipe);
+                        g_hPipe = INVALID_HANDLE_VALUE;
+                        break;
+                    }
+                }
+                else if (!connected && err == ERROR_PIPE_CONNECTED)
+                {
+                    connected = TRUE;
+                }
+
                 if (connected && g_bServerRunning)
                 {
                     DWORD bytesRead = 0;
-                    if (ReadFile(hPipe, s_reqBuf, sizeof(s_reqBuf) - 1, &bytesRead, nullptr) && bytesRead > 0)
+                    OVERLAPPED readOv = { 0 };
+                    readOv.hEvent = hConnectEvent;
+                    ResetEvent(hConnectEvent);
+
+                    BOOL readOk = ReadFile(hPipe, s_reqBuf, sizeof(s_reqBuf) - 1, &bytesRead, &readOv);
+                    if (!readOk && GetLastError() == ERROR_IO_PENDING)
+                    {
+                        HANDLE events[2] = { hConnectEvent, g_hShutdownEvent };
+                        DWORD waitRes = WaitForMultipleObjects(2, events, FALSE, 3000);
+                        if (waitRes == WAIT_OBJECT_0)
+                        {
+                            GetOverlappedResult(hPipe, &readOv, &bytesRead, FALSE);
+                            readOk = TRUE;
+                        }
+                        else
+                        {
+                            CancelIo(hPipe);
+                        }
+                    }
+
+                    if (readOk && bytesRead > 0)
                     {
                         s_reqBuf[bytesRead] = '\0';
                         ProcessCommand(s_reqBuf, s_respBuf, sizeof(s_respBuf));
 
                         DWORD bytesWritten = 0;
-                        WriteFile(hPipe, s_respBuf, static_cast<DWORD>(strlen(s_respBuf)), &bytesWritten, nullptr);
+                        OVERLAPPED writeOv = { 0 };
+                        writeOv.hEvent = hConnectEvent;
+                        ResetEvent(hConnectEvent);
+
+                        WriteFile(hPipe, s_respBuf, static_cast<DWORD>(strlen(s_respBuf)), &bytesWritten, &writeOv);
+                        GetOverlappedResult(hPipe, &writeOv, &bytesWritten, TRUE);
                         FlushFileBuffers(hPipe);
                     }
                     DisconnectNamedPipe(hPipe);
@@ -1235,6 +1290,9 @@ namespace ShaiyaOverlay
                 g_hPipe = INVALID_HANDLE_VALUE;
             }
 
+            if (hConnectEvent)
+                CloseHandle(hConnectEvent);
+
             Logger::Info("[MCP] Pipe server thread stopped");
             return 0;
         }
@@ -1243,6 +1301,11 @@ namespace ShaiyaOverlay
         {
             if (g_bServerRunning)
                 return true;
+
+            if (!g_hShutdownEvent)
+                g_hShutdownEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+            else
+                ResetEvent(g_hShutdownEvent);
 
             g_bServerRunning = true;
             DWORD dwThreadId = 0;
@@ -1266,6 +1329,9 @@ namespace ShaiyaOverlay
 
             g_bServerRunning = false;
 
+            if (g_hShutdownEvent)
+                SetEvent(g_hShutdownEvent);
+
             if (g_hTaskDoneEvent)
             {
                 SetEvent(g_hTaskDoneEvent);
@@ -1273,17 +1339,26 @@ namespace ShaiyaOverlay
                 g_hTaskDoneEvent = nullptr;
             }
 
+            if (g_hPipeThread)
+            {
+                if (WaitForSingleObject(g_hPipeThread, 500) != WAIT_OBJECT_0)
+                {
+                    TerminateThread(g_hPipeThread, 0);
+                }
+                CloseHandle(g_hPipeThread);
+                g_hPipeThread = nullptr;
+            }
+
+            if (g_hShutdownEvent)
+            {
+                CloseHandle(g_hShutdownEvent);
+                g_hShutdownEvent = nullptr;
+            }
+
             if (g_hPipe != INVALID_HANDLE_VALUE)
             {
                 CloseHandle(g_hPipe);
                 g_hPipe = INVALID_HANDLE_VALUE;
-            }
-
-            if (g_hPipeThread)
-            {
-                TerminateThread(g_hPipeThread, 0);
-                CloseHandle(g_hPipeThread);
-                g_hPipeThread = nullptr;
             }
 
             Logger::Info("[MCP] StopServer finished");

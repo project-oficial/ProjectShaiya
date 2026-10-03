@@ -77,9 +77,21 @@ namespace ShaiyaOverlay
         {
             ImVec4 ThreatCol = GetThreatColor(Risk.OverallThreat);
             ImGui::TextColored(ThreatCol, "[RISK: %s]", Risk.Summary);
-            ImGui::Text("FPS: %.1f | Hostiles: %u | Quests: %u | [INS] %s",
-                ImGui::GetIO().Framerate, Risk.NearbyHostilesCount, QuestManager::GetQuestCount(),
-                WndProcHook::IsMenuOpen() ? "Close UI" : "Open UI");
+            ImGui::Text("FPS: %.1f | Hostiles: %u | Quests: %u",
+                ImGui::GetIO().Framerate, Risk.NearbyHostilesCount, QuestManager::GetQuestCount());
+
+            if (WndProcHook::IsMenuOpen())
+            {
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
+                if (ImGui::SmallButton("DESCARREGAR MOD"))
+                {
+                    WndProcHook::RequestUnload();
+                }
+                ImGui::PopStyleColor(3);
+            }
 
             if (NavigationManager::IsNavigating())
             {
@@ -121,7 +133,7 @@ namespace ShaiyaOverlay
         RiskAssessment Risk = RiskCalculator::Evaluate(Player, Monsters);
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 95.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(380.0f, 230.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(380.0f, 265.0f), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Local Player & Hardcore Risk"))
         {
@@ -156,6 +168,16 @@ namespace ShaiyaOverlay
             {
                 ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Scanning character memory...");
             }
+
+            ImGui::Separator();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.15f, 0.15f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
+            if (ImGui::Button("Descarregar / Ejetar Mod (Unload)", ImVec2(-1.0f, 26.0f)))
+            {
+                WndProcHook::RequestUnload();
+            }
+            ImGui::PopStyleColor(3);
         }
         ImGui::End();
     }
