@@ -70,6 +70,9 @@ namespace ShaiyaOverlay
                 U8 SkillLvl = 0;
                 bool SkillFound = false;
 
+                U32 SkillDuration = 0;
+                U32 SkillStartTick = 0;
+
                 if (SkillVecFirst && SkillVecLast && SkillVecLast > SkillVecFirst)
                 {
                     U64 MaxSkills = (SkillVecLast - SkillVecFirst) / sizeof(U64);
@@ -80,6 +83,8 @@ namespace ShaiyaOverlay
                         {
                             Memory::ReadSafe(SkillDataPtr + 2, &SkillId);
                             Memory::ReadSafe(SkillDataPtr + 4, &SkillLvl);
+                            Memory::ReadSafe(SkillDataPtr + 8, &SkillDuration);
+                            Memory::ReadSafe(SkillDataPtr + 12, &SkillStartTick);
                             SkillFound = true;
                         }
                     }
@@ -91,7 +96,17 @@ namespace ShaiyaOverlay
                     {
                         StringUtils::Format(Entry.Name, sizeof(Entry.Name), "Skill #%u", SkillId);
                     }
-                    StringUtils::Format(Entry.Details, sizeof(Entry.Details), "Lvl %u", SkillLvl);
+
+                    U32 CurTime = SkillManager::GetGameTimeMs();
+                    if (SkillDuration > 0 && SkillStartTick > 0 && CurTime >= SkillStartTick && (CurTime - SkillStartTick) < SkillDuration)
+                    {
+                        F32 Rem = static_cast<F32>(SkillDuration - (CurTime - SkillStartTick)) / 1000.0f;
+                        StringUtils::Format(Entry.Details, sizeof(Entry.Details), "Lvl %u (CD: %.1fs)", SkillLvl, Rem);
+                    }
+                    else
+                    {
+                        StringUtils::Format(Entry.Details, sizeof(Entry.Details), "Lvl %u", SkillLvl);
+                    }
                 }
                 else
                 {

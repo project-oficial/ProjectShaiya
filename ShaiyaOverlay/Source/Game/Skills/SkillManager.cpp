@@ -184,6 +184,8 @@ namespace ShaiyaOverlay
         if (ElementCount > 64)
             ElementCount = 64;
 
+        U32 CurrentGameTime = GetGameTimeMs();
+
         for (U32 I = 0; I < (U32)ElementCount; ++I)
         {
             U64 SkillDataPtr = 0;
@@ -203,6 +205,12 @@ namespace ShaiyaOverlay
             if (Info.SkillId == 0)
                 continue;
 
+            U32 Duration = 0;
+            U32 StartTick = 0;
+            Memory::ReadSafe(SkillDataPtr + 8, &Duration);
+            Memory::ReadSafe(SkillDataPtr + 12, &StartTick);
+
+            Info.CooldownDuration = static_cast<F32>(Duration) / 1000.0f;
             Info.CooldownRemaining = 0.0f;
             Info.IsReady = true;
             Info.IsPassive = false;
@@ -213,8 +221,38 @@ namespace ShaiyaOverlay
                 StringUtils::Format(Info.Name, sizeof(Info.Name), "Skill #%u", Info.SkillId);
             }
 
+            if (!Info.IsPassive && Duration > 0 && StartTick > 0)
+            {
+                if (CurrentGameTime >= StartTick)
+                {
+                    U32 Elapsed = CurrentGameTime - StartTick;
+                    if (Elapsed < Duration)
+                    {
+                        Info.CooldownRemaining = static_cast<F32>(Duration - Elapsed) / 1000.0f;
+                        Info.IsReady = false;
+                    }
+                }
+            }
+
             Skills.Add(Info);
         }
+    }
+
+    U32 SkillManager::GetGameTimeMs()
+    {
+        if (Offsets.GetGameTimeMsAddr)
+        {
+            using GetGameTimeMsFn = U32(*)();
+            auto Fn = reinterpret_cast<GetGameTimeMsFn>(Offsets.GetGameTimeMsAddr);
+            __try
+            {
+                return Fn();
+            }
+            __except (1)
+            {
+            }
+        }
+        return GetTickCount();
     }
 
     U32 SkillManager::GetSelectedTargetWorldId()

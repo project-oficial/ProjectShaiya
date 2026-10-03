@@ -80,6 +80,19 @@ def query_player() -> Dict[str, Any]:
     return res
 
 
+def query_skills() -> Dict[str, Any]:
+    """Queries list of all player skills with IDs, names, levels, cooldown remaining and duration."""
+    res = send_pipe_command({"cmd": "get_skills"})
+    if res is None:
+        return {
+            "status": "offline",
+            "game_connected": False,
+            "message": "Game is not running or ShaiyaOverlay.dll is not injected.",
+        }
+    res["game_connected"] = True
+    return res
+
+
 def query_entities(type_filter: str = "all", max_distance: float = 300.0, limit: int = 50) -> Dict[str, Any]:
     """Queries nearby monsters, items on ground, and quest NPCs/markers."""
     res = send_pipe_command({

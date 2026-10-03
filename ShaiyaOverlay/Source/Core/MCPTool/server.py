@@ -26,6 +26,12 @@ def shaiya_get_player() -> dict:
 
 
 @mcp.tool()
+def shaiya_get_skills() -> dict:
+    """Get list of all player skills with IDs, names, levels, learned status, ready status, cooldown remaining, and total cooldown duration."""
+    return mcp_client.query_skills()
+
+
+@mcp.tool()
 def shaiya_get_entities(type_filter: str = "all", max_distance: float = 300.0, limit: int = 50) -> dict:
     """Query nearby entities loaded in memory.
     Parameters:

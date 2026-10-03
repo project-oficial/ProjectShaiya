@@ -668,6 +668,10 @@ namespace ShaiyaOverlay
                     {
                         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "ARVORE");
                     }
+                    else if (Skill.IsPassive)
+                    {
+                        ImGui::TextDisabled("PASSIVA");
+                    }
                     else if (Skill.IsReady)
                     {
                         ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "PRONTA");
@@ -678,13 +682,9 @@ namespace ShaiyaOverlay
                     }
 
                     ImGui::TableSetColumnIndex(4);
-                    if (!Skill.IsLearned)
+                    if (!Skill.IsLearned || Skill.IsPassive)
                     {
                         ImGui::TextDisabled("-");
-                    }
-                    else if (Skill.IsPassive)
-                    {
-                        ImGui::TextDisabled("PASSIVA");
                     }
                     else
                     {

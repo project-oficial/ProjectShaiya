@@ -277,6 +277,14 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  CastSkillAddr   : FAILED (AOB not found)");
 
+        // 22. GetGameTimeMs (sub_14039CF70)
+        U64 MatchTime = PatternScanner::ScanModule(nullptr, "39 6B 10 74 ? E8 ? ? ? ? 41 8B 8F 70 68 00 00");
+        Offsets.GetGameTimeMsAddr = MatchTime ? PatternScanner::RipRelative(MatchTime + 5, 1, 5) : 0;
+        if (Offsets.GetGameTimeMsAddr)
+            Logger::Info("  GetGameTimeMs   : 0x%llX", Offsets.GetGameTimeMsAddr);
+        else
+            Logger::Error("  GetGameTimeMs   : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -299,12 +307,13 @@ namespace ShaiyaOverlay
                        Offsets.KeyBuffer &&
                        Offsets.CheckLineOfSightAddr &&
                        Offsets.GetGroundHeightAddr &&
-                       Offsets.CastSkillAddr;
+                       Offsets.CastSkillAddr &&
+                       Offsets.GetGameTimeMsAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 21 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 22 AOB patterns resolved successfully.");
 
         return Success;
     }

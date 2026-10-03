@@ -31,6 +31,7 @@ namespace ShaiyaOverlay
         U64 CheckLineOfSightAddr;
         U64 GetGroundHeightAddr;
         U64 CastSkillAddr;
+        U64 GetGameTimeMsAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;

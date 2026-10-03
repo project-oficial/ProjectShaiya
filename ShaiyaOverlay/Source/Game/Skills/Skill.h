@@ -9,6 +9,7 @@ namespace ShaiyaOverlay
         U16 SkillId;
         U16 Level;
         F32 CooldownRemaining;
+        F32 CooldownDuration;
         char Name[64];
         bool IsReady;
         bool IsLearned;

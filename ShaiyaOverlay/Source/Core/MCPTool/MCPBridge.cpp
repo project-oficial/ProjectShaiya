@@ -941,6 +941,39 @@ namespace ShaiyaOverlay
             sprintf_s(pResponse, nMaxLen, "{\"status\":\"error\",\"message\":\"unknown key or invalid value\"}");
         }
 
+        static void HandleGetSkills(char* pResponseJson, size_t nMaxLen)
+        {
+            const auto& skills = SkillManager::GetSkills();
+            size_t offset = sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"skills\":[");
+
+            for (U32 i = 0; i < skills.GetCount(); ++i)
+            {
+                const auto& s = skills[i];
+                char itemBuf[256];
+                char safeName[64] = { 0 };
+                sanitize_string(s.Name, safeName, sizeof(safeName));
+
+                int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
+                    "%s{\"id\":%u,\"level\":%u,\"name\":\"%s\",\"learned\":%s,\"passive\":%s,\"ready\":%s,\"slot\":%u,\"cooldown\":%.1f,\"duration\":%.1f}",
+                    (i > 0) ? "," : "",
+                    s.SkillId, s.Level, safeName,
+                    s.IsLearned ? "true" : "false",
+                    s.IsPassive ? "true" : "false",
+                    s.IsReady ? "true" : "false",
+                    s.LearnedSlot,
+                    s.CooldownRemaining,
+                    s.CooldownDuration
+                );
+
+                if (itemLen > 0 && (offset + itemLen + 32) < nMaxLen)
+                {
+                    memcpy(pResponseJson + offset, itemBuf, itemLen);
+                    offset += itemLen;
+                }
+            }
+            sprintf_s(pResponseJson + offset, nMaxLen - offset, "]}");
+        }
+
         static void HandleSelectTarget(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
         {
             double d = 0;
@@ -1067,6 +1100,10 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "get_nearest_target") == 0)
             {
                 HandleGetNearestTarget(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_skills") == 0)
+            {
+                HandleGetSkills(pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "get_navigation") == 0)
             {
