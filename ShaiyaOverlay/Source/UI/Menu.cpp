@@ -620,7 +620,7 @@ namespace ShaiyaOverlay
         }
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 335.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(440.0f, 240.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(500.0f, 260.0f), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Learned Skills Tracker"))
         {
@@ -656,12 +656,13 @@ namespace ShaiyaOverlay
 
             ImGui::Separator();
 
-            if (ImGui::BeginTable("SkillsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTable("SkillsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
             {
-                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("Skill", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Lvl", ImGuiTableColumnFlags_WidthFixed, 30.0f);
-                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+                ImGui::TableSetupColumn("Habilidade", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Nv", ImGuiTableColumnFlags_WidthFixed, 25.0f);
+                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableSetupColumn("Estado", ImGuiTableColumnFlags_WidthFixed, 75.0f);
                 ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 55.0f);
                 ImGui::TableHeadersRow();
 
@@ -686,6 +687,20 @@ namespace ShaiyaOverlay
                     ImGui::Text("%u", Skill.Level);
 
                     ImGui::TableSetColumnIndex(3);
+                    if (Skill.IsPassive)
+                    {
+                        ImGui::TextDisabled("Passiva");
+                    }
+                    else if (Skill.CooldownDuration > 0.0f)
+                    {
+                        ImGui::Text("%.0fs", Skill.CooldownDuration);
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("0s");
+                    }
+
+                    ImGui::TableSetColumnIndex(4);
                     if (!Skill.IsLearned)
                     {
                         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "ARVORE");
@@ -703,7 +718,7 @@ namespace ShaiyaOverlay
                         ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%.1fs", Skill.CooldownRemaining);
                     }
 
-                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TableSetColumnIndex(5);
                     if (!Skill.IsLearned || Skill.IsPassive)
                     {
                         ImGui::TextDisabled("-");
@@ -717,7 +732,7 @@ namespace ShaiyaOverlay
 
                         if (ImGui::SmallButton(BtnLabel))
                         {
-                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType);
+                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType, TargetWorldId);
                         }
 
                         if (!Skill.IsReady)

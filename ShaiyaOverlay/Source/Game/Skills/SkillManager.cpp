@@ -13,10 +13,11 @@ namespace ShaiyaOverlay
         return ResolveSkillDetails(SkillId, Level, OutName, MaxLen, nullptr, nullptr);
     }
 
-    bool SkillManager::ResolveSkillDetails(U16 SkillId, U16 Level, char* OutName, U32 MaxLen, bool* OutPassive, U8* OutTargetType)
+    bool SkillManager::ResolveSkillDetails(U16 SkillId, U16 Level, char* OutName, U32 MaxLen, bool* OutPassive, U8* OutTargetType, U16* OutBaseCooldownSec)
     {
         if (OutPassive) *OutPassive = false;
         if (OutTargetType) *OutTargetType = 3;
+        if (OutBaseCooldownSec) *OutBaseCooldownSec = 0;
 
         if (!OutName || MaxLen == 0 || SkillId == 0)
             return false;
@@ -89,10 +90,13 @@ namespace ShaiyaOverlay
                             {
                                 U8 Cat = 0;
                                 U8 TType = 0;
+                                U16 BaseCd = 0;
                                 Memory::ReadSafe(LNode + 0x32, &Cat);
                                 Memory::ReadSafe(LNode + 0x3E, &TType);
+                                Memory::ReadSafe(LNode + 0x58, &BaseCd);
                                 if (OutPassive) *OutPassive = (Cat == 10);
                                 if (OutTargetType) *OutTargetType = TType;
+                                if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
 
                                 if (NamePtr)
                                 {
@@ -132,10 +136,13 @@ namespace ShaiyaOverlay
                             Memory::ReadSafe(LN + 0x20, &NP);
                             U8 Cat = 0;
                             U8 TType = 0;
+                            U16 BaseCd = 0;
                             Memory::ReadSafe(LN + 0x32, &Cat);
                             Memory::ReadSafe(LN + 0x3E, &TType);
+                            Memory::ReadSafe(LN + 0x58, &BaseCd);
                             if (OutPassive) *OutPassive = (Cat == 10);
                             if (OutTargetType) *OutTargetType = TType;
+                            if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
 
                             if (NP)
                             {
@@ -210,25 +217,33 @@ namespace ShaiyaOverlay
             Memory::ReadSafe(SkillDataPtr + 8, &Duration);
             Memory::ReadSafe(SkillDataPtr + 12, &StartTick);
 
-            Info.CooldownDuration = static_cast<F32>(Duration) / 1000.0f;
+            U16 BaseCdSec = 0;
             Info.CooldownRemaining = 0.0f;
             Info.IsReady = true;
             Info.IsPassive = false;
             Info.TargetType = 3;
 
-            if (!ResolveSkillDetails(Info.SkillId, Info.Level, Info.Name, sizeof(Info.Name), &Info.IsPassive, &Info.TargetType))
+            if (!ResolveSkillDetails(Info.SkillId, Info.Level, Info.Name, sizeof(Info.Name), &Info.IsPassive, &Info.TargetType, &BaseCdSec))
             {
                 StringUtils::Format(Info.Name, sizeof(Info.Name), "Skill #%u", Info.SkillId);
             }
 
-            if (!Info.IsPassive && Duration > 0 && StartTick > 0)
+            if (Duration > 0)
+                Info.CooldownDuration = static_cast<F32>(Duration) / 1000.0f;
+            else if (BaseCdSec > 0 && !Info.IsPassive)
+                Info.CooldownDuration = static_cast<F32>(BaseCdSec);
+            else
+                Info.CooldownDuration = 0.0f;
+
+            if (!Info.IsPassive && Info.CooldownDuration > 0.0f && StartTick > 0)
             {
+                U32 TotalDurMs = Duration > 0 ? Duration : (static_cast<U32>(BaseCdSec) * 1000);
                 if (CurrentGameTime >= StartTick)
                 {
                     U32 Elapsed = CurrentGameTime - StartTick;
-                    if (Elapsed < Duration)
+                    if (Elapsed < TotalDurMs)
                     {
-                        Info.CooldownRemaining = static_cast<F32>(Duration - Elapsed) / 1000.0f;
+                        Info.CooldownRemaining = static_cast<F32>(TotalDurMs - Elapsed) / 1000.0f;
                         Info.IsReady = false;
                     }
                 }
@@ -346,6 +361,34 @@ namespace ShaiyaOverlay
         __try
         {
             Fn(LearnedSlot, TargetWorldId);
+
+            // Record cast timestamp for instant cooldown countdown
+            if (Offsets.SkillVector)
+            {
+                U64 FirstPtr = 0;
+                U64 LastPtr = 0;
+                if (Memory::ReadSafe(Offsets.SkillVector + 8, &FirstPtr) && FirstPtr &&
+                    Memory::ReadSafe(Offsets.SkillVector + 16, &LastPtr) && LastPtr > FirstPtr)
+                {
+                    U64 Count = (LastPtr - FirstPtr) / sizeof(U64);
+                    for (U32 i = 0; i < Count; ++i)
+                    {
+                        U64 SkillDataPtr = 0;
+                        if (Memory::ReadSafe(FirstPtr + i * sizeof(U64), &SkillDataPtr) && SkillDataPtr)
+                        {
+                            U8 Slot = 0xFF;
+                            Memory::ReadSafe(SkillDataPtr, &Slot);
+                            if (Slot == LearnedSlot)
+                            {
+                                U32 Now = GetGameTimeMs();
+                                *reinterpret_cast<U32*>(SkillDataPtr + 12) = Now;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             return true;
         }
         __except (1)
