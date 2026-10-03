@@ -9,6 +9,7 @@
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include "Game/Skills/SkillManager.h"
 #include "UI/Menu.h"
 
 #include <windows.h>
@@ -940,6 +941,103 @@ namespace ShaiyaOverlay
             sprintf_s(pResponse, nMaxLen, "{\"status\":\"error\",\"message\":\"unknown key or invalid value\"}");
         }
 
+        static void HandleSelectTarget(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
+        {
+            double d = 0;
+            uint32_t targetId = 0;
+            if (extract_json_double(pRequestJson, "target_id", d))
+                targetId = static_cast<uint32_t>(d);
+
+            if (!Offsets.WorldManager)
+            {
+                sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"error\",\"message\":\"WorldManager not found\"}");
+                return;
+            }
+
+            U64 LocalPlayerPtr = 0;
+            if (!Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) || !LocalPlayerPtr)
+            {
+                sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"error\",\"message\":\"LocalPlayer not found\"}");
+                return;
+            }
+
+            *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = targetId;
+            U64 TargetTypeGlobal = (Offsets.PlayerId - 0xA06AAC) + 0xA0FF5C;
+            if (TargetTypeGlobal)
+                *reinterpret_cast<U32*>(TargetTypeGlobal) = (targetId != 0 && targetId != 0xFFFFFFFF) ? 2 : 0;
+
+            sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"action\":\"select_target\",\"target_id\":%u}", targetId);
+        }
+
+        static void HandleCastSkill(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
+        {
+            double dSlot = 0;
+            double dTarget = 0;
+            double dType = 3;
+
+            int slot = 0;
+            if (extract_json_double(pRequestJson, "slot", dSlot))
+                slot = static_cast<int>(dSlot);
+
+            U8 targetType = 3;
+            if (extract_json_double(pRequestJson, "target_type", dType))
+                targetType = static_cast<U8>(dType);
+
+            if (extract_json_double(pRequestJson, "target_id", dTarget))
+            {
+                U32 explicitTarget = static_cast<U32>(dTarget);
+                if (explicitTarget != 0 && Offsets.WorldManager)
+                {
+                    U64 LocalPlayerPtr = 0;
+                    if (Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
+                    {
+                        *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = explicitTarget;
+                        U64 TargetTypeGlobal = (Offsets.PlayerId - 0xA06AAC) + 0xA0FF5C;
+                        if (TargetTypeGlobal)
+                            *reinterpret_cast<U32*>(TargetTypeGlobal) = 2;
+                    }
+                }
+            }
+
+            bool ok = SkillManager::CastSkill(static_cast<U8>(slot), targetType);
+            U32 usedTarget = SkillManager::GetSelectedTargetWorldId();
+
+            sprintf_s(pResponseJson, nMaxLen,
+                "{\"status\":\"%s\",\"action\":\"cast_skill\",\"slot\":%d,\"target_id\":%u}",
+                ok ? "ok" : "error", slot, usedTarget);
+        }
+
+        static void HandleUseQuickslot(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
+        {
+            double dSlot = 0;
+            int slot = 0;
+            if (extract_json_double(pRequestJson, "slot", dSlot))
+                slot = static_cast<int>(dSlot);
+
+            HWND Hwnd = nullptr;
+            if (Offsets.GameHwnd)
+            {
+                U64 HwndVal = 0;
+                if (Memory::ReadSafe(Offsets.GameHwnd, &HwndVal) && HwndVal)
+                    Hwnd = reinterpret_cast<HWND>(HwndVal);
+            }
+            if (!Hwnd) Hwnd = FindWindowA("SDL_app", nullptr);
+
+            if (Hwnd)
+            {
+                WPARAM vk = (slot >= 0 && slot <= 8) ? ('1' + slot) : (slot == 9 ? '0' : 0);
+                if (vk)
+                {
+                    UINT sc = MapVirtualKeyA((UINT)vk, 0);
+                    PostMessageA(Hwnd, WM_KEYDOWN, vk, 1 | (sc << 16));
+                    PostMessageA(Hwnd, WM_KEYUP, vk, 1 | (sc << 16) | (1 << 30) | (1 << 31));
+                    sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"action\":\"use_quickslot\",\"slot\":%d,\"key\":\"%c\"}", slot, (char)vk);
+                    return;
+                }
+            }
+            sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"error\",\"message\":\"Failed to send quickslot key\"}");
+        }
+
         void ProcessCommand(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
         {
             char cmd[64] = { 0 };
@@ -980,6 +1078,18 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "stop_walk") == 0)
             {
                 HandleStopWalk(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "select_target") == 0)
+            {
+                HandleSelectTarget(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "cast_skill") == 0)
+            {
+                HandleCastSkill(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "use_quickslot") == 0)
+            {
+                HandleUseQuickslot(pRequestJson, pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "unload") == 0 || strcmp(cmd, "unload_overlay") == 0 || strcmp(cmd, "eject") == 0)
             {
@@ -1125,17 +1235,17 @@ namespace ShaiyaOverlay
                 g_hTaskDoneEvent = nullptr;
             }
 
+            if (g_hPipe != INVALID_HANDLE_VALUE)
+            {
+                CloseHandle(g_hPipe);
+                g_hPipe = INVALID_HANDLE_VALUE;
+            }
+
             if (g_hPipeThread)
             {
                 TerminateThread(g_hPipeThread, 0);
                 CloseHandle(g_hPipeThread);
                 g_hPipeThread = nullptr;
-            }
-
-            if (g_hPipe != INVALID_HANDLE_VALUE)
-            {
-                CloseHandle(g_hPipe);
-                g_hPipe = INVALID_HANDLE_VALUE;
             }
 
             Logger::Info("[MCP] StopServer finished");

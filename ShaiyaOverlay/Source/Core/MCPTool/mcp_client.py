@@ -151,7 +151,7 @@ def walk_to(x: float, y: Optional[float] = None, z: Optional[float] = None, name
 
 
 def stop_walk() -> Dict[str, Any]:
-    """Stops any active auto-walk routine."""
+    """Stops active auto-walking."""
     res = send_pipe_command({"cmd": "stop_walk"})
     if res is None:
         return {
@@ -159,6 +159,36 @@ def stop_walk() -> Dict[str, Any]:
             "game_connected": False,
             "message": "Game is not running or ShaiyaOverlay.dll is not injected.",
         }
+    res["game_connected"] = True
+    return res
+
+
+def select_target(target_id: int) -> Dict[str, Any]:
+    """Sets player's targeted entity in game memory."""
+    res = send_pipe_command({"cmd": "select_target", "target_id": target_id})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def cast_skill(slot: int, target_id: Optional[int] = None, target_type: int = 3) -> Dict[str, Any]:
+    """Casts a skill directly by its learned slot index."""
+    payload: Dict[str, Any] = {"cmd": "cast_skill", "slot": slot, "target_type": target_type}
+    if target_id is not None:
+        payload["target_id"] = target_id
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def use_quickslot(slot: int) -> Dict[str, Any]:
+    """Triggers an in-game quickslot (0-9) via native input event."""
+    res = send_pipe_command({"cmd": "use_quickslot", "slot": slot})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
     res["game_connected"] = True
     return res
 

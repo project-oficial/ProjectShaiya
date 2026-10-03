@@ -170,6 +170,9 @@ namespace ShaiyaOverlay
             IsHooked = false;
         }
 
+        Sleep(100);
+
+        Renderer::Uninitialize();
         CleanupRenderTarget();
 
         if (Context)

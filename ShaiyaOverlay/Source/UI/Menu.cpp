@@ -589,44 +589,117 @@ namespace ShaiyaOverlay
         const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
         U32 SkillCount = Skills.GetCount();
 
+        static bool FilterOnlyLearned = true;
+
+        U32 LearnedCount = 0;
+        for (U32 I = 0; I < SkillCount; ++I)
+        {
+            if (Skills[I].IsLearned) LearnedCount++;
+        }
+
         ImGui::SetNextWindowPos(ImVec2(10.0f, 335.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(380.0f, 220.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(440.0f, 240.0f), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Learned Skills Tracker"))
         {
-            ImGui::Text("Total Skills: %u", SkillCount);
+            ImGui::Checkbox("Somente Aprendidas", &FilterOnlyLearned);
+            ImGui::SameLine();
+            ImGui::TextDisabled("(%u/%u)", LearnedCount, SkillCount);
+
+            U32 TargetWorldId = SkillManager::GetSelectedTargetWorldId();
+            const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
+            const char* TargetName = nullptr;
+            U32 TargetCurHp = 0;
+            U32 TargetMaxHp = 0;
+            if (TargetWorldId != 0)
+            {
+                for (U32 M = 0; M < Mobs.GetCount(); ++M)
+                {
+                    if (Mobs[M].WorldId == TargetWorldId)
+                    {
+                        TargetName = Mobs[M].Name;
+                        TargetCurHp = Mobs[M].CurrentHp;
+                        TargetMaxHp = Mobs[M].MaxHp;
+                        break;
+                    }
+                }
+            }
+
+            if (TargetName)
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Alvo: %s (%u/%u)", TargetName, TargetCurHp, TargetMaxHp);
+            else if (TargetWorldId != 0)
+                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Alvo: ID 0x%08X", TargetWorldId);
+            else
+                ImGui::TextDisabled("Alvo: Nenhum (auto-alvo no mais próximo)");
+
             ImGui::Separator();
 
-            if (ImGui::BeginTable("SkillsTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTable("SkillsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
             {
-                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 40.0f);
                 ImGui::TableSetupColumn("Skill", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Lvl", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("Lvl", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 55.0f);
                 ImGui::TableHeadersRow();
 
                 for (U32 I = 0; I < SkillCount; ++I)
                 {
                     const SkillInfo& Skill = Skills[I];
+                    if (FilterOnlyLearned && !Skill.IsLearned)
+                        continue;
+
                     ImGui::TableNextRow();
 
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%u", Skill.SkillId);
 
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s", Skill.Name);
+                    if (!Skill.IsLearned)
+                        ImGui::TextDisabled("%s (Bloqueada)", Skill.Name);
+                    else
+                        ImGui::Text("%s", Skill.Name);
 
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%u", Skill.Level);
 
                     ImGui::TableSetColumnIndex(3);
-                    if (Skill.IsReady)
+                    if (!Skill.IsLearned)
                     {
-                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "READY");
+                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "ARVORE");
+                    }
+                    else if (Skill.IsReady)
+                    {
+                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "PRONTA");
                     }
                     else
                     {
                         ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%.1fs", Skill.CooldownRemaining);
+                    }
+
+                    ImGui::TableSetColumnIndex(4);
+                    if (!Skill.IsLearned)
+                    {
+                        ImGui::TextDisabled("-");
+                    }
+                    else if (Skill.IsPassive)
+                    {
+                        ImGui::TextDisabled("PASSIVA");
+                    }
+                    else
+                    {
+                        char BtnLabel[32];
+                        StringUtils::Format(BtnLabel, sizeof(BtnLabel), "Usar##S%u", Skill.SkillId);
+                        if (!Skill.IsReady)
+                            ImGui::BeginDisabled();
+
+                        if (ImGui::SmallButton(BtnLabel))
+                        {
+                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType);
+                        }
+
+                        if (!Skill.IsReady)
+                            ImGui::EndDisabled();
                     }
                 }
 

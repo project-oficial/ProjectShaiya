@@ -133,6 +133,9 @@ namespace ShaiyaOverlay
             IsHooked = false;
         }
 
+        Sleep(100);
+        Renderer::Uninitialize();
+
         Device = nullptr;
         IsInitialized = false;
         Logger::Info("D3D9Hook: Uninitialized successfully.");

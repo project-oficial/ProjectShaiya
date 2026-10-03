@@ -83,6 +83,24 @@ def shaiya_stop_walk() -> dict:
 
 
 @mcp.tool()
+def shaiya_select_target(target_id: int) -> dict:
+    """Select a specific target entity by WorldId."""
+    return mcp_client.select_target(target_id=target_id)
+
+
+@mcp.tool()
+def shaiya_cast_skill(slot: int, target_id: Optional[int] = None, target_type: int = 3) -> dict:
+    """Cast a skill directly by slot index (0 = Interpretação, 1 = Tranquilidade, 2 = Flecha Mágica)."""
+    return mcp_client.cast_skill(slot=slot, target_id=target_id, target_type=target_type)
+
+
+@mcp.tool()
+def shaiya_use_quickslot(slot: int) -> dict:
+    """Trigger an in-game quickslot key (0-9 for bar 1 keys 1-0)."""
+    return mcp_client.use_quickslot(slot=slot)
+
+
+@mcp.tool()
 def shaiya_check_collision(start_x: float, start_y: float, start_z: float,
                            end_x: float, end_y: float, end_z: float, radius: float = 0.75) -> dict:
     """Run native collision / raycast test between two points.

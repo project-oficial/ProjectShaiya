@@ -11,5 +11,9 @@ namespace ShaiyaOverlay
         F32 CooldownRemaining;
         char Name[64];
         bool IsReady;
+        bool IsLearned;
+        bool IsPassive;
+        U8 TargetType;
+        U8 LearnedSlot;
     };
 }

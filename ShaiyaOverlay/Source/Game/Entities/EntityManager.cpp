@@ -222,14 +222,25 @@ namespace ShaiyaOverlay
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterWorldId, &Entity.WorldId);
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterMobId, &Entity.MobId);
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterLevel, &Entity.Level);
-                Memory::ReadSafe(MonsterPtr + Offsets.MonsterMaxHp, &Entity.MaxHp);
-                Memory::ReadSafe(MonsterPtr + Offsets.MonsterCurrentHp, &Entity.CurrentHp);
+
+                F32 HpPct = 0.0f;
+                Memory::ReadSafe(MonsterPtr + 0x10C, &HpPct);
+                Memory::ReadSafe(MonsterPtr + 0x110, &Entity.MaxHp);
+
+                if (HpPct > 0.001f && HpPct <= 1.05f && Entity.MaxHp > 0)
+                {
+                    Entity.CurrentHp = static_cast<U32>(HpPct * Entity.MaxHp + 0.5f);
+                    Entity.Alive = true;
+                }
+                else
+                {
+                    Entity.CurrentHp = 0;
+                    Entity.Alive = false;
+                }
 
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterPosX, &Entity.Position.X);
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterPosY, &Entity.Position.Y);
                 Memory::ReadSafe(MonsterPtr + Offsets.MonsterPosZ, &Entity.Position.Z);
-
-                Entity.Alive = (Entity.CurrentHp > 0);
 
                 if (CurrentPlayer.Valid)
                     Entity.Distance = Entity.Position.DistanceTo(CurrentPlayer.Position);

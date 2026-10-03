@@ -28,7 +28,7 @@ namespace ShaiyaOverlay
         Offsets.MonsterMobId       = 0x30;
         Offsets.MonsterLevel       = 0x34;
         Offsets.MonsterMaxHp       = 0x110;
-        Offsets.MonsterCurrentHp   = 0x114;
+        Offsets.MonsterCurrentHp   = 0x10C;
 
         // CNpc offsets
         Offsets.NpcPosX            = 0x6C;
@@ -48,6 +48,7 @@ namespace ShaiyaOverlay
         Offsets.PlayerDestZ        = 0x334;
         Offsets.PlayerState        = 0x2B4;
         Offsets.PlayerIdOffset     = 0x78;
+        Offsets.PlayerTargetWorldId = 0x344;
 
         // CItem (Ground loot) offsets
         Offsets.ItemWorldId        = 0x08;
@@ -88,9 +89,9 @@ namespace ShaiyaOverlay
         }
         else
         {
-            Offsets.PlayerCurrentHp = ImageBase + 0x0A10FBC;
-            Offsets.PlayerMaxHp     = ImageBase + 0x0A10FC0;
             Offsets.PlayerLevel     = ImageBase + 0x0A10F70;
+            Offsets.PlayerCurrentHp = ImageBase + 0x0A10F74;
+            Offsets.PlayerMaxHp     = ImageBase + 0x0A10F74;
         }
         Logger::Info("  PlayerCurrentHp : 0x%llX (AOB: %s)", Offsets.PlayerCurrentHp, MatchStats ? "YES" : "FALLBACK");
         Logger::Info("  PlayerMaxHp     : 0x%llX (AOB: %s)", Offsets.PlayerMaxHp, MatchStats ? "YES" : "FALLBACK");
@@ -251,5 +252,10 @@ namespace ShaiyaOverlay
         U64 MatchHeight = PatternScanner::ScanModule(nullptr, "48 8B C4 48 83 EC 58 80 79 09 00 74 72");
         Offsets.GetGroundHeightAddr = MatchHeight ? MatchHeight : (ImageBase + 0x05C320);
         Logger::Info("  GetGroundHeight : 0x%llX (AOB: %s)", Offsets.GetGroundHeightAddr, MatchHeight ? "YES" : "FALLBACK");
+
+        // 21. CastSkill (sub_140385C80)
+        U64 MatchCast = PatternScanner::ScanModule(nullptr, "B8 28 10 00 00 E8 ? ? ? ? 48 2B E0 B8 17 05 00 00");
+        Offsets.CastSkillAddr = MatchCast ? MatchCast : (ImageBase + 0x385C80);
+        Logger::Info("  CastSkillAddr   : 0x%llX (AOB: %s)", Offsets.CastSkillAddr, MatchCast ? "YES" : "FALLBACK");
     }
 }

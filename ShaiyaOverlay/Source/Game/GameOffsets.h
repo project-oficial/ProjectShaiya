@@ -29,6 +29,7 @@ namespace ShaiyaOverlay
         U64 KeyBuffer;
         U64 CheckLineOfSightAddr;
         U64 GetGroundHeightAddr;
+        U64 CastSkillAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;
@@ -66,6 +67,7 @@ namespace ShaiyaOverlay
         U32 PlayerDestZ;
         U32 PlayerState;
         U32 PlayerIdOffset;
+        U32 PlayerTargetWorldId;
 
         // CItem offsets (ground dropped loot)
         U32 ItemWorldId;

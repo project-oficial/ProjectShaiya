@@ -2,6 +2,7 @@
 #include "Core/Memory.h"
 #include "Core/StringUtils.h"
 #include "Game/GameOffsets.h"
+#include "Game/Entities/EntityManager.h"
 
 namespace ShaiyaOverlay
 {
@@ -9,6 +10,14 @@ namespace ShaiyaOverlay
 
     bool SkillManager::ResolveSkillName(U16 SkillId, U16 Level, char* OutName, U32 MaxLen)
     {
+        return ResolveSkillDetails(SkillId, Level, OutName, MaxLen, nullptr, nullptr);
+    }
+
+    bool SkillManager::ResolveSkillDetails(U16 SkillId, U16 Level, char* OutName, U32 MaxLen, bool* OutPassive, U8* OutTargetType)
+    {
+        if (OutPassive) *OutPassive = false;
+        if (OutTargetType) *OutTargetType = 3;
+
         if (!OutName || MaxLen == 0 || SkillId == 0)
             return false;
 
@@ -76,15 +85,25 @@ namespace ShaiyaOverlay
                             Memory::ReadSafe(LNode + 0x1A, &LLvl);
                             Memory::ReadSafe(LNode + 0x20, &NamePtr);
 
-                            if (LSid == SkillId && LLvl == Level && NamePtr)
+                            if (LSid == SkillId && LLvl == Level)
                             {
-                                char Temp[64] = { 0 };
-                                if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
+                                U8 Cat = 0;
+                                U8 TType = 0;
+                                Memory::ReadSafe(LNode + 0x32, &Cat);
+                                Memory::ReadSafe(LNode + 0x3E, &TType);
+                                if (OutPassive) *OutPassive = (Cat == 10);
+                                if (OutTargetType) *OutTargetType = TType;
+
+                                if (NamePtr)
                                 {
-                                    if (Temp[0] != '\0' && !StringUtils::Equals(Temp, "???") && !StringUtils::Equals(Temp, "placeholder"))
+                                    char Temp[64] = { 0 };
+                                    if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                                     {
-                                        StringUtils::Copy(OutName, Temp, MaxLen);
-                                        return true;
+                                        if (Temp[0] != '\0' && !StringUtils::Equals(Temp, "???") && !StringUtils::Equals(Temp, "placeholder"))
+                                        {
+                                            StringUtils::Copy(OutName, Temp, MaxLen);
+                                            return true;
+                                        }
                                     }
                                 }
                             }
@@ -111,6 +130,13 @@ namespace ShaiyaOverlay
                         {
                             U64 NP = 0;
                             Memory::ReadSafe(LN + 0x20, &NP);
+                            U8 Cat = 0;
+                            U8 TType = 0;
+                            Memory::ReadSafe(LN + 0x32, &Cat);
+                            Memory::ReadSafe(LN + 0x3E, &TType);
+                            if (OutPassive) *OutPassive = (Cat == 10);
+                            if (OutTargetType) *OutTargetType = TType;
+
                             if (NP)
                             {
                                 char Temp[64] = { 0 };
@@ -165,23 +191,108 @@ namespace ShaiyaOverlay
                 continue;
 
             SkillInfo Info = { 0 };
+            U8 SlotIdx = 0xFF;
             U8 Lvl = 0;
+            Memory::ReadSafe(SkillDataPtr, &SlotIdx);
             Memory::ReadSafe(SkillDataPtr + 2, &Info.SkillId);
             Memory::ReadSafe(SkillDataPtr + 4, &Lvl);
             Info.Level = Lvl;
+            Info.IsLearned = (SlotIdx != 0xFF);
+            Info.LearnedSlot = SlotIdx;
 
             if (Info.SkillId == 0)
                 continue;
 
             Info.CooldownRemaining = 0.0f;
             Info.IsReady = true;
+            Info.IsPassive = false;
+            Info.TargetType = 3;
 
-            if (!ResolveSkillName(Info.SkillId, Info.Level, Info.Name, sizeof(Info.Name)))
+            if (!ResolveSkillDetails(Info.SkillId, Info.Level, Info.Name, sizeof(Info.Name), &Info.IsPassive, &Info.TargetType))
             {
                 StringUtils::Format(Info.Name, sizeof(Info.Name), "Skill #%u", Info.SkillId);
             }
 
             Skills.Add(Info);
+        }
+    }
+
+    U32 SkillManager::GetSelectedTargetWorldId()
+    {
+        if (!Offsets.WorldManager)
+            return 0;
+
+        U64 LocalPlayerPtr = 0;
+        if (Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
+        {
+            U32 TargetWorldId = 0xFFFFFFFF;
+            if (Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerTargetWorldId, &TargetWorldId))
+            {
+                if (TargetWorldId != 0xFFFFFFFF && TargetWorldId != 0)
+                {
+                    const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
+                    for (U32 M = 0; M < Mobs.GetCount(); ++M)
+                    {
+                        if (Mobs[M].WorldId == TargetWorldId && Mobs[M].Alive)
+                            return TargetWorldId;
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    bool SkillManager::CastSkill(U8 LearnedSlot, U8 TargetType)
+    {
+        if (!Offsets.CastSkillAddr || LearnedSlot == 0xFF)
+            return false;
+
+        U32 TargetWorldId = 0;
+
+        if (TargetType == 0) // Self / Ally Buff
+        {
+            if (Offsets.PlayerId)
+                Memory::ReadSafe(Offsets.PlayerId, &TargetWorldId);
+        }
+        else // Enemy spell
+        {
+            TargetWorldId = GetSelectedTargetWorldId();
+            if (TargetWorldId == 0)
+            {
+                // Auto-target closest alive monster within 25m
+                const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
+                F32 MinDist = 25.0f;
+                for (U32 M = 0; M < Mobs.GetCount(); ++M)
+                {
+                    if (Mobs[M].Alive && Mobs[M].Distance < MinDist)
+                    {
+                        MinDist = Mobs[M].Distance;
+                        TargetWorldId = Mobs[M].WorldId;
+                    }
+                }
+
+                if (TargetWorldId != 0 && Offsets.WorldManager)
+                {
+                    U64 LocalPlayerPtr = 0;
+                    if (Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
+                    {
+                        *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = TargetWorldId;
+                    }
+                }
+            }
+        }
+
+        using CastSkillFn = void(__fastcall*)(U8 SlotIndex, U32 TargetId);
+        auto Fn = reinterpret_cast<CastSkillFn>(Offsets.CastSkillAddr);
+
+        __try
+        {
+            Fn(LearnedSlot, TargetWorldId);
+            return true;
+        }
+        __except (1)
+        {
+            return false;
         }
     }
 }

@@ -3,6 +3,7 @@
 #include "Core/Logger.h"
 #include "Game/GameOffsets.h"
 #include <windows.h>
+#include <imgui.h>
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -165,8 +166,40 @@ namespace ShaiyaOverlay
 
         if (MenuOpen)
         {
-            if (ImGui_ImplWin32_WndProcHandler(Hwnd, Msg, WParam, LParam))
-                return TRUE;
+            ImGui_ImplWin32_WndProcHandler(Hwnd, Msg, WParam, LParam);
+
+            switch (Msg)
+            {
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_LBUTTONDBLCLK:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONUP:
+            case WM_RBUTTONDBLCLK:
+            case WM_MBUTTONDOWN:
+            case WM_MBUTTONUP:
+            case WM_MBUTTONDBLCLK:
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+                return 0;
+            }
+
+            if (ImGui::GetCurrentContext())
+            {
+                ImGuiIO& io = ImGui::GetIO();
+                if (io.WantCaptureKeyboard)
+                {
+                    switch (Msg)
+                    {
+                    case WM_KEYDOWN:
+                    case WM_KEYUP:
+                    case WM_CHAR:
+                    case WM_SYSKEYDOWN:
+                    case WM_SYSKEYUP:
+                        return 0;
+                    }
+                }
+            }
         }
 
         if (OriginalWndProc)
