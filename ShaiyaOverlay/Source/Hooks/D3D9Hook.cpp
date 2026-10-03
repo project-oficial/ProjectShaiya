@@ -15,6 +15,7 @@ namespace ShaiyaOverlay
     IDirect3DDevice9* D3D9Hook::Device = nullptr;
     bool D3D9Hook::IsInitialized = false;
     bool D3D9Hook::IsHooked = false;
+    volatile LONG D3D9Hook::ActiveEndSceneCalls = 0;
 
     bool D3D9Hook::Initialize()
     {
@@ -121,19 +122,23 @@ namespace ShaiyaOverlay
             if (OriginalEndScene)
             {
                 Memory::RestoreVTableFunction(DeviceVTable, 42, reinterpret_cast<void*>(OriginalEndScene));
-                OriginalEndScene = nullptr;
             }
 
             if (OriginalReset)
             {
                 Memory::RestoreVTableFunction(DeviceVTable, 16, reinterpret_cast<void*>(OriginalReset));
-                OriginalReset = nullptr;
             }
 
             IsHooked = false;
         }
 
-        Sleep(100);
+        DWORD start = GetTickCount();
+        while (ActiveEndSceneCalls > 0 && (GetTickCount() - start) < 1000)
+        {
+            Sleep(10);
+        }
+
+        Sleep(150);
         Renderer::Uninitialize();
 
         Device = nullptr;
@@ -143,37 +148,45 @@ namespace ShaiyaOverlay
 
     HRESULT __fastcall D3D9Hook::HookedEndScene(IDirect3DDevice9* InDevice)
     {
-        if (!IsInitialized && InDevice)
+        InterlockedIncrement(&ActiveEndSceneCalls);
+        EndSceneFn Orig = OriginalEndScene;
+
+        if (!WndProcHook::ShouldUnload())
         {
-            Device = InDevice;
-            D3DDEVICE_CREATION_PARAMETERS Params = { 0 };
-            InDevice->GetCreationParameters(&Params);
-
-            HWND TargetHwnd = Params.hFocusWindow;
-            if (!TargetHwnd)
-                TargetHwnd = WndProcHook::GetWindowHandle();
-
-            Logger::Info("D3D9 HookedEndScene: First frame! Device: 0x%p, Window: 0x%p", InDevice, TargetHwnd);
-
-            if (Renderer::InitializeD3D9(TargetHwnd, InDevice))
+            if (!IsInitialized && InDevice)
             {
-                IsInitialized = true;
-                Logger::Info("D3D9 HookedEndScene: Renderer initialized successfully.");
+                Device = InDevice;
+                D3DDEVICE_CREATION_PARAMETERS Params = { 0 };
+                InDevice->GetCreationParameters(&Params);
+
+                HWND TargetHwnd = Params.hFocusWindow;
+                if (!TargetHwnd)
+                    TargetHwnd = WndProcHook::GetWindowHandle();
+
+                Logger::Info("D3D9 HookedEndScene: First frame! Device: 0x%p, Window: 0x%p", InDevice, TargetHwnd);
+
+                if (Renderer::InitializeD3D9(TargetHwnd, InDevice))
+                {
+                    IsInitialized = true;
+                    Logger::Info("D3D9 HookedEndScene: Renderer initialized successfully.");
+                }
+                else
+                {
+                    Logger::Error("D3D9 HookedEndScene: Failed to initialize renderer.");
+                }
             }
-            else
+
+            if (IsInitialized)
             {
-                Logger::Error("D3D9 HookedEndScene: Failed to initialize renderer.");
+                Renderer::NewFrame();
+                Menu::Render();
+                Renderer::RenderDrawData();
             }
         }
 
-        if (IsInitialized)
-        {
-            Renderer::NewFrame();
-            Menu::Render();
-            Renderer::RenderDrawData();
-        }
-
-        return OriginalEndScene(InDevice);
+        HRESULT hr = Orig ? Orig(InDevice) : S_OK;
+        InterlockedDecrement(&ActiveEndSceneCalls);
+        return hr;
     }
 
     HRESULT __fastcall D3D9Hook::HookedReset(IDirect3DDevice9* InDevice, D3DPRESENT_PARAMETERS* Params)

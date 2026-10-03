@@ -55,6 +55,8 @@ namespace ShaiyaOverlay
 
         Logger::Info("Unload requested. Cleaning up resources...");
 
+        WndProcHook::RequestUnload();
+
 #ifdef MCP_TOOL
         MCPBridge::StopServer();
 #endif
@@ -63,7 +65,7 @@ namespace ShaiyaOverlay
         Logger::Info("Shutdown complete. Ejecting DLL...");
         Logger::Uninitialize();
 
-        Sleep(200);
+        Sleep(300);
 
         FreeLibraryAndExitThread(ModuleHandle, 0);
         return 0;

@@ -28,5 +28,6 @@ namespace ShaiyaOverlay
         static WNDPROC OriginalWndProc;
         static bool MenuOpen;
         static bool UnloadRequested;
+        static volatile LONG ActiveWndProcCalls;
     };
 }

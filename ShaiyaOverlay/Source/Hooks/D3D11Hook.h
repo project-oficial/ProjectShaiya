@@ -35,5 +35,6 @@ namespace ShaiyaOverlay
         static ID3D11RenderTargetView* RenderTargetView;
         static bool IsInitialized;
         static bool IsHooked;
+        static volatile LONG ActivePresentCalls;
     };
 }

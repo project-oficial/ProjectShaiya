@@ -27,5 +27,6 @@ namespace ShaiyaOverlay
         static IDirect3DDevice9* Device;
         static bool IsInitialized;
         static bool IsHooked;
+        static volatile LONG ActiveEndSceneCalls;
     };
 }

@@ -13,6 +13,7 @@ namespace ShaiyaOverlay
     WNDPROC WndProcHook::OriginalWndProc = nullptr;
     bool WndProcHook::MenuOpen = false;
     bool WndProcHook::UnloadRequested = false;
+    volatile LONG WndProcHook::ActiveWndProcCalls = 0;
 
     BOOL CALLBACK WndProcHook::EnumWindowsCallback(HWND Hwnd, LPARAM LParam)
     {
@@ -125,22 +126,41 @@ namespace ShaiyaOverlay
     {
         if (OriginalWndProc && WindowHandle)
         {
+            WNDPROC Orig = OriginalWndProc;
             if (IsWindowUnicode(WindowHandle))
-                SetWindowLongPtrW(WindowHandle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(OriginalWndProc));
+                SetWindowLongPtrW(WindowHandle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Orig));
             else
-                SetWindowLongPtrA(WindowHandle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(OriginalWndProc));
+                SetWindowLongPtrA(WindowHandle, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Orig));
 
-            OriginalWndProc = nullptr;
+            DWORD start = GetTickCount();
+            while (ActiveWndProcCalls > 0 && (GetTickCount() - start) < 500)
+            {
+                Sleep(10);
+            }
+
             Logger::Info("WndProcHook: Restored original WndProc.");
         }
     }
 
     LRESULT CALLBACK WndProcHook::HookedWndProc(HWND Hwnd, UINT Msg, WPARAM WParam, LPARAM LParam)
     {
+        InterlockedIncrement(&ActiveWndProcCalls);
+        WNDPROC Orig = OriginalWndProc;
+
+        if (UnloadRequested)
+        {
+            LRESULT res = Orig ? (IsWindowUnicode(Hwnd) ? CallWindowProcW(Orig, Hwnd, Msg, WParam, LParam) : CallWindowProcA(Orig, Hwnd, Msg, WParam, LParam)) : DefWindowProcA(Hwnd, Msg, WParam, LParam);
+            InterlockedDecrement(&ActiveWndProcCalls);
+            return res;
+        }
+
         if (Msg == WM_KEYDOWN)
         {
             if (WParam == VK_INSERT || WParam == VK_END)
+            {
+                InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
+            }
         }
         else if (Msg == WM_KEYUP)
         {
@@ -154,12 +174,14 @@ namespace ShaiyaOverlay
                     LastToggleTick = Now;
                     Logger::Info("WndProcHook: Menu toggled via INSERT. State: %s", MenuOpen ? "OPEN" : "CLOSED");
                 }
+                InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
             }
             else if (WParam == VK_END)
             {
                 UnloadRequested = true;
                 Logger::Info("WndProcHook: Unload requested via END.");
+                InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
             }
         }
@@ -181,6 +203,7 @@ namespace ShaiyaOverlay
             case WM_MBUTTONDBLCLK:
             case WM_MOUSEWHEEL:
             case WM_MOUSEHWHEEL:
+                InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
             }
 
@@ -196,20 +219,27 @@ namespace ShaiyaOverlay
                     case WM_CHAR:
                     case WM_SYSKEYDOWN:
                     case WM_SYSKEYUP:
+                        InterlockedDecrement(&ActiveWndProcCalls);
                         return 0;
                     }
                 }
             }
         }
 
-        if (OriginalWndProc)
+        LRESULT result = 0;
+        if (Orig)
         {
             if (IsWindowUnicode(Hwnd))
-                return CallWindowProcW(OriginalWndProc, Hwnd, Msg, WParam, LParam);
+                result = CallWindowProcW(Orig, Hwnd, Msg, WParam, LParam);
             else
-                return CallWindowProcA(OriginalWndProc, Hwnd, Msg, WParam, LParam);
+                result = CallWindowProcA(Orig, Hwnd, Msg, WParam, LParam);
+        }
+        else
+        {
+            result = DefWindowProcA(Hwnd, Msg, WParam, LParam);
         }
 
-        return DefWindowProcA(Hwnd, Msg, WParam, LParam);
+        InterlockedDecrement(&ActiveWndProcCalls);
+        return result;
     }
 }

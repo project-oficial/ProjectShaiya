@@ -16,6 +16,7 @@ namespace ShaiyaOverlay
     ID3D11RenderTargetView* D3D11Hook::RenderTargetView = nullptr;
     bool D3D11Hook::IsInitialized = false;
     bool D3D11Hook::IsHooked = false;
+    volatile LONG D3D11Hook::ActivePresentCalls = 0;
 
     bool D3D11Hook::CreateRenderTarget(IDXGISwapChain* SwapChain)
     {
@@ -158,19 +159,25 @@ namespace ShaiyaOverlay
             if (OriginalPresent)
             {
                 Memory::RestoreVTableFunction(SwapChainVTable, 8, reinterpret_cast<void*>(OriginalPresent));
-                OriginalPresent = nullptr;
             }
 
             if (OriginalResizeBuffers)
             {
                 Memory::RestoreVTableFunction(SwapChainVTable, 13, reinterpret_cast<void*>(OriginalResizeBuffers));
-                OriginalResizeBuffers = nullptr;
             }
 
             IsHooked = false;
         }
 
-        Sleep(100);
+        // Wait for any active HookedPresent frames to complete
+        DWORD start = GetTickCount();
+        while (ActivePresentCalls > 0 && (GetTickCount() - start) < 1000)
+        {
+            Sleep(10);
+        }
+
+        // Wait several video frames for engine thread to execute cleanly on restored VTable
+        Sleep(150);
 
         Renderer::Uninitialize();
         CleanupRenderTarget();
@@ -193,40 +200,48 @@ namespace ShaiyaOverlay
 
     HRESULT __fastcall D3D11Hook::HookedPresent(IDXGISwapChain* SwapChain, UINT SyncInterval, UINT Flags)
     {
-        if (!IsInitialized && SwapChain)
+        InterlockedIncrement(&ActivePresentCalls);
+        PresentFn Orig = OriginalPresent;
+
+        if (!WndProcHook::ShouldUnload())
         {
-            if (SUCCEEDED(SwapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&Device))))
+            if (!IsInitialized && SwapChain)
             {
-                Device->GetImmediateContext(&Context);
-
-                DXGI_SWAP_CHAIN_DESC Desc;
-                SwapChain->GetDesc(&Desc);
-
-                CreateRenderTarget(SwapChain);
-                Logger::Info("D3D11 HookedPresent: First frame! OutputWindow: 0x%p", Desc.OutputWindow);
-                WndProcHook::AttachToWindow(Desc.OutputWindow);
-
-                if (Renderer::InitializeD3D11(Desc.OutputWindow, Device, Context))
+                if (SUCCEEDED(SwapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&Device))))
                 {
-                    IsInitialized = true;
-                    Logger::Info("D3D11 HookedPresent: Renderer initialized successfully.");
+                    Device->GetImmediateContext(&Context);
+
+                    DXGI_SWAP_CHAIN_DESC Desc;
+                    SwapChain->GetDesc(&Desc);
+
+                    CreateRenderTarget(SwapChain);
+                    Logger::Info("D3D11 HookedPresent: First frame! OutputWindow: 0x%p", Desc.OutputWindow);
+                    WndProcHook::AttachToWindow(Desc.OutputWindow);
+
+                    if (Renderer::InitializeD3D11(Desc.OutputWindow, Device, Context))
+                    {
+                        IsInitialized = true;
+                        Logger::Info("D3D11 HookedPresent: Renderer initialized successfully.");
+                    }
+                    else
+                    {
+                        Logger::Error("D3D11 HookedPresent: Failed to initialize renderer.");
+                    }
                 }
-                else
-                {
-                    Logger::Error("D3D11 HookedPresent: Failed to initialize renderer.");
-                }
+            }
+
+            if (IsInitialized && Context && RenderTargetView)
+            {
+                Renderer::NewFrame();
+                Menu::Render();
+                Context->OMSetRenderTargets(1, &RenderTargetView, nullptr);
+                Renderer::RenderDrawData();
             }
         }
 
-        if (IsInitialized && Context && RenderTargetView)
-        {
-            Renderer::NewFrame();
-            Menu::Render();
-            Context->OMSetRenderTargets(1, &RenderTargetView, nullptr);
-            Renderer::RenderDrawData();
-        }
-
-        return OriginalPresent(SwapChain, SyncInterval, Flags);
+        HRESULT hr = Orig ? Orig(SwapChain, SyncInterval, Flags) : S_OK;
+        InterlockedDecrement(&ActivePresentCalls);
+        return hr;
     }
 
     HRESULT __fastcall D3D11Hook::HookedResizeBuffers(IDXGISwapChain* SwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags)
