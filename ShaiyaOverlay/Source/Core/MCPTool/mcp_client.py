@@ -206,6 +206,20 @@ def use_quickslot(slot: int) -> Dict[str, Any]:
     return res
 
 
+def auto_login(username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
+    """Triggers or checks the automatic login state machine."""
+    cmd_data = {"cmd": "auto_login"}
+    if username:
+        cmd_data["username"] = username
+    if password:
+        cmd_data["password"] = password
+    res = send_pipe_command(cmd_data)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
 def walk_to_target(target_type: str = "any", name_filter: Optional[str] = None, stop_distance: float = 2.5) -> Dict[str, Any]:
     """Finds nearest NPC, monster or item (optionally matching name_filter) and starts pathfinding walk_to."""
     ents = query_entities(type_filter="all" if target_type == "any" else target_type, max_distance=500.0, limit=100)

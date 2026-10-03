@@ -107,6 +107,14 @@ def shaiya_use_quickslot(slot: int) -> dict:
 
 
 @mcp.tool()
+def shaiya_auto_login(username: str = "", password: str = "") -> dict:
+    """Automatically logs into account, selects server, and chooses character.
+    If username/password are empty, uses credentials from auto_login.ini.
+    """
+    return mcp_client.auto_login(username=username or None, password=password or None)
+
+
+@mcp.tool()
 def shaiya_check_collision(start_x: float, start_y: float, start_z: float,
                            end_x: float, end_y: float, end_z: float, radius: float = 0.75) -> dict:
     """Run native collision / raycast test between two points.

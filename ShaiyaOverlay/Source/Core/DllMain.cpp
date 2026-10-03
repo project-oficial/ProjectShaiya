@@ -3,6 +3,7 @@
 #include "Hooks/HookManager.h"
 #include "Hooks/WndProcHook.h"
 #include "Game/GameOffsets.h"
+#include "Game/Login/AutoLoginManager.h"
 #include "Core/MCPTool/MCPBridge.h"
 
 namespace ShaiyaOverlay
@@ -37,6 +38,8 @@ namespace ShaiyaOverlay
 
         Logger::Info("Overlay active! Press [INSERT] to toggle UI, [END] to unload.");
 
+        AutoLoginManager::Initialize();
+
 #ifdef MCP_TOOL
         MCPBridge::StartServer();
 #endif
@@ -54,6 +57,8 @@ namespace ShaiyaOverlay
         }
 
         Logger::Info("Unload requested. Cleaning up resources...");
+
+        AutoLoginManager::Shutdown();
 
         WndProcHook::RequestUnload();
 

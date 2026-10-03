@@ -12,6 +12,7 @@
 #include "Game/QuickSlots/QuickSlotManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include "Game/Login/AutoLoginManager.h"
 #include "Core/MCPTool/MCPBridge.h"
 
 namespace ShaiyaOverlay
@@ -133,7 +134,7 @@ namespace ShaiyaOverlay
         RiskAssessment Risk = RiskCalculator::Evaluate(Player, Monsters);
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 95.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(380.0f, 345.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(380.0f, 430.0f), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Local Player & Hardcore Risk"))
         {
@@ -188,6 +189,25 @@ namespace ShaiyaOverlay
             else
             {
                 ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Scanning character memory...");
+            }
+
+            ImGui::Separator();
+            GameState State = AutoLoginManager::GetCurrentGameState();
+            ImGui::Text("Game State: %s (%u)", AutoLoginManager::GetGameStateName(State), static_cast<U8>(State));
+            ImGui::Text("Auto-Login: %s", AutoLoginManager::GetStatusMessage());
+            if (AutoLoginManager::IsRunning())
+            {
+                if (ImGui::Button("Cancelar Auto-Login", ImVec2(-1.0f, 22.0f)))
+                {
+                    AutoLoginManager::Stop();
+                }
+            }
+            else
+            {
+                if (ImGui::Button("Executar Auto-Login Manual", ImVec2(-1.0f, 22.0f)))
+                {
+                    AutoLoginManager::Start();
+                }
             }
 
             ImGui::Separator();

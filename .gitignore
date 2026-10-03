@@ -7,3 +7,7 @@
 *.vsidx
 .vs
 *.iobj
+auto_login.ini
+*.local.ini
+__pycache__/
+*.pyc

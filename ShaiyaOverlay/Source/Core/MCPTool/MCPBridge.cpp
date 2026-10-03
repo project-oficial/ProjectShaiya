@@ -10,6 +10,7 @@
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
 #include "Game/Skills/SkillManager.h"
+#include "Game/Login/AutoLoginManager.h"
 #include "UI/Menu.h"
 
 #include <windows.h>
@@ -203,13 +204,18 @@ namespace ShaiyaOverlay
             {
                 const PlayerData& player = EntityManager::GetLocalPlayer();
                 Vector3 navTarget = NavigationManager::GetTargetPosition();
+                GameState state = AutoLoginManager::GetCurrentGameState();
 
                 sprintf_s(pResponse, nMaxLen,
                     "{\"status\":\"ok\",\"pid\":%lu,\"overlay_active\":true,\"menu_open\":%s,"
+                    "\"game_state\":%u,\"game_state_name\":\"%s\",\"auto_login_status\":\"%s\","
                     "\"navigation\":{\"active\":%s,\"target_name\":\"%s\",\"target_pos\":[%.2f,%.2f,%.2f],\"remaining_dist\":%.1f,\"waypoint_count\":%u,\"cur_waypoint\":%u},"
                     "\"player\":{\"valid\":%s,\"id\":%u,\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"mp\":%u,\"max_mp\":%u,\"sp\":%u,\"max_sp\":%u,\"pos\":[%.2f,%.2f,%.2f]}}",
                     GetCurrentProcessId(),
                     WndProcHook::IsMenuOpen() ? "true" : "false",
+                    static_cast<U8>(state),
+                    AutoLoginManager::GetGameStateName(state),
+                    AutoLoginManager::GetStatusMessage(),
                     NavigationManager::IsNavigating() ? "true" : "false",
                     NavigationManager::GetTargetName(),
                     navTarget.X, navTarget.Y, navTarget.Z,
@@ -1140,6 +1146,53 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "use_quickslot") == 0)
             {
                 HandleUseQuickslot(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "auto_login") == 0)
+            {
+                const char* user = nullptr;
+                const char* pass = nullptr;
+                char userBuf[64] = { 0 };
+                char passBuf[64] = { 0 };
+
+                const char* pUser = strstr(pRequestJson, "\"username\":\"");
+                if (pUser)
+                {
+                    pUser += 12;
+                    const char* pEnd = strchr(pUser, '"');
+                    if (pEnd)
+                    {
+                        size_t len = (size_t)(pEnd - pUser);
+                        if (len < sizeof(userBuf))
+                        {
+                            memcpy(userBuf, pUser, len);
+                            userBuf[len] = '\0';
+                            user = userBuf;
+                        }
+                    }
+                }
+
+                const char* pPass = strstr(pRequestJson, "\"password\":\"");
+                if (pPass)
+                {
+                    pPass += 12;
+                    const char* pEnd = strchr(pPass, '"');
+                    if (pEnd)
+                    {
+                        size_t len = (size_t)(pEnd - pPass);
+                        if (len < sizeof(passBuf))
+                        {
+                            memcpy(passBuf, pPass, len);
+                            passBuf[len] = '\0';
+                            pass = passBuf;
+                        }
+                    }
+                }
+
+                bool started = AutoLoginManager::Start(user, pass);
+                GameState state = AutoLoginManager::GetCurrentGameState();
+                sprintf_s(pResponseJson, nMaxLen,
+                    "{\"status\":\"ok\",\"action\":\"auto_login\",\"started\":%s,\"game_state\":%u,\"state_name\":\"%s\",\"message\":\"%s\"}",
+                    started ? "true" : "false", static_cast<U8>(state), AutoLoginManager::GetGameStateName(state), AutoLoginManager::GetStatusMessage());
             }
             else if (strcmp(cmd, "unload") == 0 || strcmp(cmd, "unload_overlay") == 0 || strcmp(cmd, "eject") == 0)
             {

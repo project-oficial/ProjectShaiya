@@ -298,6 +298,14 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  GetGameTimeMs   : FAILED (AOB not found)");
 
+        // 23. GameState
+        U64 MatchGameState = PatternScanner::ScanModule(nullptr, "C6 05 ? ? ? ? 02 48 8B 0D");
+        Offsets.GameStateAddr = MatchGameState ? PatternScanner::RipRelative(MatchGameState, 2, 7) : 0;
+        if (Offsets.GameStateAddr)
+            Logger::Info("  GameStateAddr   : 0x%llX", Offsets.GameStateAddr);
+        else
+            Logger::Error("  GameStateAddr   : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -321,12 +329,13 @@ namespace ShaiyaOverlay
                        Offsets.CheckLineOfSightAddr &&
                        Offsets.GetGroundHeightAddr &&
                        Offsets.CastSkillAddr &&
-                       Offsets.GetGameTimeMsAddr;
+                       Offsets.GetGameTimeMsAddr &&
+                       Offsets.GameStateAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 22 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 23 AOB patterns resolved successfully.");
 
         return Success;
     }

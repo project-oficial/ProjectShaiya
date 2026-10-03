@@ -114,6 +114,7 @@
     <ClInclude Include="Source\Game\Skills\SkillManager.h" />
     <ClInclude Include="Source\Game\Items\GroundItem.h" />
     <ClInclude Include="Source\Game\Items\GroundItemManager.h" />
+    <ClInclude Include="Source\Game\Login\AutoLoginManager.h" />
     <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h" />
     <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h" />
     <ClInclude Include="Source\Game\Quests\Quest.h" />
@@ -150,6 +151,7 @@
     <ClCompile Include="Source\Game\Entities\EntityManager.cpp" />
     <ClCompile Include="Source\Game\Skills\SkillManager.cpp" />
     <ClCompile Include="Source\Game\Items\GroundItemManager.cpp" />
+    <ClCompile Include="Source\Game\Login\AutoLoginManager.cpp" />
     <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp" />
     <ClCompile Include="Source\Game\Quests\QuestManager.cpp" />
     <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp" />
