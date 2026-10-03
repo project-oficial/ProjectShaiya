@@ -207,7 +207,7 @@ namespace ShaiyaOverlay
                 sprintf_s(pResponse, nMaxLen,
                     "{\"status\":\"ok\",\"pid\":%lu,\"overlay_active\":true,\"menu_open\":%s,"
                     "\"navigation\":{\"active\":%s,\"target_name\":\"%s\",\"target_pos\":[%.2f,%.2f,%.2f],\"remaining_dist\":%.1f,\"waypoint_count\":%u,\"cur_waypoint\":%u},"
-                    "\"player\":{\"valid\":%s,\"id\":%u,\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"pos\":[%.2f,%.2f,%.2f]}}",
+                    "\"player\":{\"valid\":%s,\"id\":%u,\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"mp\":%u,\"max_mp\":%u,\"sp\":%u,\"max_sp\":%u,\"pos\":[%.2f,%.2f,%.2f]}}",
                     GetCurrentProcessId(),
                     WndProcHook::IsMenuOpen() ? "true" : "false",
                     NavigationManager::IsNavigating() ? "true" : "false",
@@ -221,6 +221,10 @@ namespace ShaiyaOverlay
                     player.Level,
                     player.CurrentHp,
                     player.MaxHp,
+                    player.CurrentMp,
+                    player.MaxMp,
+                    player.CurrentSp,
+                    player.MaxSp,
                     player.Position.X, player.Position.Y, player.Position.Z
                 );
             }
@@ -265,6 +269,7 @@ namespace ShaiyaOverlay
                 sprintf_s(pResponse, nMaxLen,
                     "{\"status\":\"ok\",\"player\":{"
                     "\"valid\":%s,\"id\":%u,\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"hp_pct\":%.1f,"
+                    "\"mp\":%u,\"max_mp\":%u,\"mp_pct\":%.1f,\"sp\":%u,\"max_sp\":%u,\"sp_pct\":%.1f,"
                     "\"pos\":[%.2f,%.2f,%.2f],\"dir\":[%.3f,%.3f,%.3f],\"dest\":[%.2f,%.2f,%.2f],"
                     "\"player_state\":%u,\"camera_eye\":[%.2f,%.2f,%.2f],\"ptr\":\"0x%llX\"}}",
                     player.Valid ? "true" : "false",
@@ -273,6 +278,12 @@ namespace ShaiyaOverlay
                     player.CurrentHp,
                     player.MaxHp,
                     player.GetHpPercentage() * 100.0f,
+                    player.CurrentMp,
+                    player.MaxMp,
+                    player.GetMpPercentage() * 100.0f,
+                    player.CurrentSp,
+                    player.MaxSp,
+                    player.GetSpPercentage() * 100.0f,
                     player.Position.X, player.Position.Y, player.Position.Z,
                     dir.X, dir.Y, dir.Z,
                     dest.X, dest.Y, dest.Z,

@@ -22,5 +22,17 @@ namespace ShaiyaOverlay
             if (MaxHp == 0) return 0.0f;
             return (F32)CurrentHp / (F32)MaxHp;
         }
+
+        F32 GetMpPercentage() const
+        {
+            if (MaxMp == 0) return 0.0f;
+            return (F32)CurrentMp / (F32)MaxMp;
+        }
+
+        F32 GetSpPercentage() const
+        {
+            if (MaxSp == 0) return 0.0f;
+            return (F32)CurrentSp / (F32)MaxSp;
+        }
     };
 }

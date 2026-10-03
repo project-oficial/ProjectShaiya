@@ -133,7 +133,7 @@ namespace ShaiyaOverlay
         RiskAssessment Risk = RiskCalculator::Evaluate(Player, Monsters);
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 95.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(380.0f, 265.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(380.0f, 345.0f), ImGuiCond_FirstUseEver);
 
         if (ImGui::Begin("Local Player & Hardcore Risk"))
         {
@@ -143,14 +143,35 @@ namespace ShaiyaOverlay
                 ImGui::Text("Position: X: %.1f  Y: %.1f  Z: %.1f", Player.Position.X, Player.Position.Y, Player.Position.Z);
                 ImGui::Separator();
 
+                // Health (HP)
                 F32 HpPct = Player.GetHpPercentage();
                 char HpText[64];
                 StringUtils::Format(HpText, sizeof(HpText), "%u / %u (%.0f%%)", Player.CurrentHp, Player.MaxHp, HpPct * 100.0f);
 
                 ImVec4 HpBarColor = (HpPct < 0.35f) ? ImVec4(0.9f, 0.1f, 0.1f, 1.0f) : ImVec4(0.1f, 0.8f, 0.2f, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, HpBarColor);
-                ImGui::Text("Health:");
+                ImGui::Text("Vida (HP):");
                 ImGui::ProgressBar(HpPct, ImVec2(-1.0f, 0.0f), HpText);
+                ImGui::PopStyleColor();
+
+                // Mana (MP)
+                F32 MpPct = Player.GetMpPercentage();
+                char MpText[64];
+                StringUtils::Format(MpText, sizeof(MpText), "%u / %u (%.0f%%)", Player.CurrentMp, Player.MaxMp, MpPct * 100.0f);
+
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.5f, 0.95f, 1.0f));
+                ImGui::Text("Mana (MP):");
+                ImGui::ProgressBar(MpPct, ImVec2(-1.0f, 0.0f), MpText);
+                ImGui::PopStyleColor();
+
+                // Stamina (SP)
+                F32 SpPct = Player.GetSpPercentage();
+                char SpText[64];
+                StringUtils::Format(SpText, sizeof(SpText), "%u / %u (%.0f%%)", Player.CurrentSp, Player.MaxSp, SpPct * 100.0f);
+
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.95f, 0.75f, 0.15f, 1.0f));
+                ImGui::Text("Estamina (SP):");
+                ImGui::ProgressBar(SpPct, ImVec2(-1.0f, 0.0f), SpText);
                 ImGui::PopStyleColor();
 
                 ImGui::Separator();

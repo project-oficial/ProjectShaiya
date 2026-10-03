@@ -155,6 +155,10 @@ namespace ShaiyaOverlay
         Memory::ReadSafe(Offsets.PlayerLevel, &CurrentPlayer.Level);
         Memory::ReadSafe(Offsets.PlayerCurrentHp, &CurrentPlayer.CurrentHp);
         Memory::ReadSafe(Offsets.PlayerMaxHp, &CurrentPlayer.MaxHp);
+        Memory::ReadSafe(Offsets.PlayerCurrentMp, &CurrentPlayer.CurrentMp);
+        Memory::ReadSafe(Offsets.PlayerMaxMp, &CurrentPlayer.MaxMp);
+        Memory::ReadSafe(Offsets.PlayerCurrentSp, &CurrentPlayer.CurrentSp);
+        Memory::ReadSafe(Offsets.PlayerMaxSp, &CurrentPlayer.MaxSp);
 
         // Retrieve position from CWorldMgr character map
         U64 CharacterMapAddr = Offsets.WorldManager + Offsets.CharacterMapOffset;

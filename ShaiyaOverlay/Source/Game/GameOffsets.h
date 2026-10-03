@@ -12,6 +12,10 @@ namespace ShaiyaOverlay
         U64 PlayerLevel;
         U64 PlayerCurrentHp;
         U64 PlayerMaxHp;
+        U64 PlayerCurrentMp;
+        U64 PlayerMaxMp;
+        U64 PlayerCurrentSp;
+        U64 PlayerMaxSp;
         U64 SkillVector;
         U64 D3DDevice;
         U64 GameHwnd;

@@ -78,22 +78,35 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  PlayerId        : FAILED (AOB not found)");
 
-        // 3. PlayerStats (HP and Level)
+        // 3. PlayerStats (HP, MP, SP, and Level)
         U64 MatchHudVitals = PatternScanner::ScanModule(nullptr, "8B 0D ? ? ? ? 89 8B 14 03 00 00 8B 05");
         if (MatchHudVitals)
         {
             Offsets.PlayerMaxHp     = PatternScanner::RipRelative(MatchHudVitals, 2, 6);
             Offsets.PlayerLevel     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp - 4) : 0;
+            Offsets.PlayerMaxMp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 4) : 0;
+            Offsets.PlayerMaxSp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 8) : 0;
+
             Offsets.PlayerCurrentHp = PatternScanner::RipRelative(MatchHudVitals + 0x32, 2, 6);
+            Offsets.PlayerCurrentMp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 4) : 0;
+            Offsets.PlayerCurrentSp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 8) : 0;
 
             Logger::Info("  PlayerCurrentHp : 0x%llX", Offsets.PlayerCurrentHp);
             Logger::Info("  PlayerMaxHp     : 0x%llX", Offsets.PlayerMaxHp);
+            Logger::Info("  PlayerCurrentMp : 0x%llX", Offsets.PlayerCurrentMp);
+            Logger::Info("  PlayerMaxMp     : 0x%llX", Offsets.PlayerMaxMp);
+            Logger::Info("  PlayerCurrentSp : 0x%llX", Offsets.PlayerCurrentSp);
+            Logger::Info("  PlayerMaxSp     : 0x%llX", Offsets.PlayerMaxSp);
             Logger::Info("  PlayerLevel     : 0x%llX", Offsets.PlayerLevel);
         }
         else
         {
             Offsets.PlayerCurrentHp = 0;
             Offsets.PlayerMaxHp     = 0;
+            Offsets.PlayerCurrentMp = 0;
+            Offsets.PlayerMaxMp     = 0;
+            Offsets.PlayerCurrentSp = 0;
+            Offsets.PlayerMaxSp     = 0;
             Offsets.PlayerLevel     = 0;
             Logger::Error("  PlayerStats     : FAILED (AOB not found)");
         }
