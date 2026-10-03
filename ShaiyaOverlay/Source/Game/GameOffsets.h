@@ -22,6 +22,7 @@ namespace ShaiyaOverlay
         U64 QuestVector;
         U64 NpcFile;
         U64 QuestTextTable;
+        U64 QuestTextTablePtr;
         U64 QuestMarkerList;
         U64 PlayerInventory;
         U64 SetActionAddr;
@@ -81,7 +82,7 @@ namespace ShaiyaOverlay
         U32 ItemCount;
         U32 ItemQuality;
 
-        static void Initialize();
+        static bool Initialize();
     };
 
     extern GameOffsets Offsets;

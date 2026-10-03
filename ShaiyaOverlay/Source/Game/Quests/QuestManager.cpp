@@ -188,6 +188,9 @@ namespace ShaiyaOverlay
             char TargetTags[4][64];
             U32 FoundTags = 0;
 
+            if (Offsets.QuestTextTablePtr && !Offsets.QuestTextTable)
+                Memory::ReadSafe(Offsets.QuestTextTablePtr, &Offsets.QuestTextTable);
+
             // 1. Read Quest Text, Mob Objectives, and Item Collection Objectives
             if (Offsets.QuestTextTable)
             {

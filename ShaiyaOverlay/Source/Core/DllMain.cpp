@@ -16,7 +16,14 @@ namespace ShaiyaOverlay
 
         Sleep(500);
 
-        GameOffsets::Initialize();
+        if (!GameOffsets::Initialize())
+        {
+            Logger::Error("GameOffsets: Initialization failed! AOB pattern scan missed required offsets. Auto-ejecting DLL...");
+            Logger::Uninitialize();
+            Sleep(200);
+            FreeLibraryAndExitThread(ModuleHandle, 0);
+            return 1;
+        }
 
         if (!HookManager::Initialize())
         {
