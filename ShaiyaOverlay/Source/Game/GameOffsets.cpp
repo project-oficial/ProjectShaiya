@@ -79,13 +79,13 @@ namespace ShaiyaOverlay
             Logger::Error("  PlayerId        : FAILED (AOB not found)");
 
         // 3. PlayerStats (HP and Level)
-        U64 MatchStats = PatternScanner::ScanModule(nullptr, "44 89 3D ? ? ? ? 44 89 79 44 4C 8B 35");
-        if (MatchStats)
+        U64 MatchHudVitals = PatternScanner::ScanModule(nullptr, "8B 0D ? ? ? ? 89 8B 14 03 00 00 8B 05");
+        if (MatchHudVitals)
         {
-            U64 StatsBase = PatternScanner::RipRelative(MatchStats, 3, 7);
-            Offsets.PlayerCurrentHp = StatsBase + 4;
-            Offsets.PlayerMaxHp     = StatsBase + 8;
-            Offsets.PlayerLevel     = StatsBase - 0x48;
+            Offsets.PlayerMaxHp     = PatternScanner::RipRelative(MatchHudVitals, 2, 6);
+            Offsets.PlayerLevel     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp - 4) : 0;
+            Offsets.PlayerCurrentHp = PatternScanner::RipRelative(MatchHudVitals + 0x32, 2, 6);
+
             Logger::Info("  PlayerCurrentHp : 0x%llX", Offsets.PlayerCurrentHp);
             Logger::Info("  PlayerMaxHp     : 0x%llX", Offsets.PlayerMaxHp);
             Logger::Info("  PlayerLevel     : 0x%llX", Offsets.PlayerLevel);
