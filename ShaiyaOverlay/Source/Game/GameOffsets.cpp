@@ -306,6 +306,59 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  GameStateAddr   : FAILED (AOB not found)");
 
+        // 24. LoginPtr (g_pLogin)
+        U64 MatchLogin = PatternScanner::ScanModule(nullptr, "E8 ? ? ? ? 90 48 89 05 ? ? ? ? 48 85 C0 0F 84 ? ? ? ? BA 01 00 00 00 E8");
+        Offsets.LoginPtr = MatchLogin ? PatternScanner::RipRelative(MatchLogin + 6, 3, 7) : 0;
+        if (Offsets.LoginPtr)
+            Logger::Info("  LoginPtr        : 0x%llX", Offsets.LoginPtr);
+        else
+            Logger::Error("  LoginPtr        : FAILED (AOB not found)");
+
+        // 25. CharacterSelectPtr (g_pCharacterSelect)
+        U64 MatchCharSelect = PatternScanner::ScanModule(nullptr, "E8 ? ? ? ? 90 48 89 05 ? ? ? ? 48 85 C0 0F 84 ? ? ? ? E8 ? ? ? ? 85 C0");
+        Offsets.CharacterSelectPtr = MatchCharSelect ? PatternScanner::RipRelative(MatchCharSelect + 6, 3, 7) : 0;
+        if (Offsets.CharacterSelectPtr)
+            Logger::Info("  CharacterSelect : 0x%llX", Offsets.CharacterSelectPtr);
+        else
+            Logger::Error("  CharacterSelect : FAILED (AOB not found)");
+
+        // 26. NetworkPtr (g_pNetwork)
+        U64 MatchNet = PatternScanner::ScanModule(nullptr, "48 8B 1D ? ? ? ? C7 83 88 0E 00 00 11 00 00 00");
+        Offsets.NetworkPtr = MatchNet ? PatternScanner::RipRelative(MatchNet, 3, 7) : 0;
+        if (Offsets.NetworkPtr)
+            Logger::Info("  NetworkPtr      : 0x%llX", Offsets.NetworkPtr);
+        else
+            Logger::Error("  NetworkPtr      : FAILED (AOB not found)");
+
+        // 27. HandshakeStatusAddr (word_1409A78F1)
+        U64 MatchHandshake = PatternScanner::ScanModule(nullptr, "80 3D ? ? ? ? 00 0F 84 ? ? ? ? 80 3D ? ? ? ? 00 0F 84 ? ? ? ? 48 8D 8D 50 0F 00 00");
+        Offsets.HandshakeStatusAddr = MatchHandshake ? PatternScanner::RipRelative(MatchHandshake, 2, 7) : 0;
+        if (Offsets.HandshakeStatusAddr)
+            Logger::Info("  HandshakeStatus : 0x%llX", Offsets.HandshakeStatusAddr);
+        else
+            Logger::Error("  HandshakeStatus : FAILED (AOB not found)");
+
+        // 28. SubmitLoginAddr (CLogin_SubmitLogin)
+        Offsets.SubmitLoginAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8D AC 24 80 F0 FF FF B8 80 10 00 00");
+        if (Offsets.SubmitLoginAddr)
+            Logger::Info("  SubmitLoginAddr : 0x%llX", Offsets.SubmitLoginAddr);
+        else
+            Logger::Error("  SubmitLoginAddr : FAILED (AOB not found)");
+
+        // 29. ConfirmServerAddr (CSelectServer_ConfirmServer)
+        Offsets.ConfirmServerAddr = PatternScanner::ScanModule(nullptr, "40 57 B8 70 11 00 00 E8 ? ? ? ? 48 2B E0");
+        if (Offsets.ConfirmServerAddr)
+            Logger::Info("  ConfirmServer   : 0x%llX", Offsets.ConfirmServerAddr);
+        else
+            Logger::Error("  ConfirmServer   : FAILED (AOB not found)");
+
+        // 30. SelectSlotAddr
+        Offsets.SelectSlotAddr = PatternScanner::ScanModule(nullptr, "48 8B C4 48 89 58 10 48 89 68 18 48 89 70 20 57 41 54 41 55 41 56 41 57 48 81 EC 50 02 00 00 0F 29 70 C8 0F 29 78 B8 48 63 FA 48 8B F1");
+        if (Offsets.SelectSlotAddr)
+            Logger::Info("  SelectSlotAddr  : 0x%llX", Offsets.SelectSlotAddr);
+        else
+            Logger::Error("  SelectSlotAddr  : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -330,12 +383,19 @@ namespace ShaiyaOverlay
                        Offsets.GetGroundHeightAddr &&
                        Offsets.CastSkillAddr &&
                        Offsets.GetGameTimeMsAddr &&
-                       Offsets.GameStateAddr;
+                       Offsets.GameStateAddr &&
+                       Offsets.LoginPtr &&
+                       Offsets.CharacterSelectPtr &&
+                       Offsets.NetworkPtr &&
+                       Offsets.HandshakeStatusAddr &&
+                       Offsets.SubmitLoginAddr &&
+                       Offsets.ConfirmServerAddr &&
+                       Offsets.SelectSlotAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 23 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 30 AOB patterns resolved successfully.");
 
         return Success;
     }

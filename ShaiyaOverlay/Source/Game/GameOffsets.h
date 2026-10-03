@@ -37,6 +37,13 @@ namespace ShaiyaOverlay
         U64 CastSkillAddr;
         U64 GetGameTimeMsAddr;
         U64 GameStateAddr;
+        U64 LoginPtr;
+        U64 CharacterSelectPtr;
+        U64 NetworkPtr;
+        U64 HandshakeStatusAddr;
+        U64 SubmitLoginAddr;
+        U64 ConfirmServerAddr;
+        U64 SelectSlotAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;

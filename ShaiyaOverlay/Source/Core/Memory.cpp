@@ -24,6 +24,27 @@ namespace ShaiyaOverlay
         }
     }
 
+    bool Memory::WriteBytesSafe(U64 Address, const void* InBuffer, U32 Size)
+    {
+        if (!Address || !InBuffer || Size == 0)
+            return false;
+
+        __try
+        {
+            const U8* Src = reinterpret_cast<const U8*>(InBuffer);
+            U8* Dst = reinterpret_cast<U8*>(Address);
+            for (U32 I = 0; I < Size; ++I)
+            {
+                Dst[I] = Src[I];
+            }
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+    }
+
     U64 Memory::GetModuleBase(const char* ModuleName)
     {
         return reinterpret_cast<U64>(GetModuleHandleA(ModuleName));

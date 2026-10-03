@@ -8,7 +8,7 @@
 
 namespace ShaiyaOverlay
 {
-    AutoLoginConfig AutoLoginManager::Config = { false, "", "", 0, 0 };
+    AutoLoginConfig AutoLoginManager::Config = { false, "", "", 0, 3 };
     volatile bool AutoLoginManager::Running = false;
     HANDLE AutoLoginManager::ThreadHandle = nullptr;
     char AutoLoginManager::StatusMessage[128] = "Idle";
@@ -46,9 +46,8 @@ namespace ShaiyaOverlay
         Config.Username[0] = '\0';
         Config.Password[0] = '\0';
         Config.ServerIndex = 0;
-        Config.CharacterSlot = 0;
+        Config.CharacterSlot = 3;
 
-        // Candidate paths for auto_login.ini
         const char* CandidatePaths[] = {
             "auto_login.ini",
             "..\\auto_login.ini",
@@ -77,7 +76,7 @@ namespace ShaiyaOverlay
         GetPrivateProfileStringA("AutoLogin", "Username", "darklee", Config.Username, sizeof(Config.Username), FoundPath);
         GetPrivateProfileStringA("AutoLogin", "Password", "", Config.Password, sizeof(Config.Password), FoundPath);
         Config.ServerIndex = GetPrivateProfileIntA("AutoLogin", "ServerIndex", 0, FoundPath);
-        Config.CharacterSlot = GetPrivateProfileIntA("AutoLogin", "CharacterSlot", 0, FoundPath);
+        Config.CharacterSlot = GetPrivateProfileIntA("AutoLogin", "CharacterSlot", 3, FoundPath);
     }
 
     bool AutoLoginManager::IsRunning()
@@ -125,16 +124,32 @@ namespace ShaiyaOverlay
 
     void AutoLoginManager::SendKey(HWND Hwnd, UINT Vk)
     {
-        PostMessageA(Hwnd, WM_KEYDOWN, Vk, 0);
-        Sleep(15);
-        PostMessageA(Hwnd, WM_KEYUP, Vk, (1 << 30) | (1 << 31));
+        UINT Scan = MapVirtualKeyA(Vk, MAPVK_VK_TO_VSC);
+        if (Vk == VK_RETURN) Scan = 0x1C;
+
+        if (Offsets.KeyBuffer)
+        {
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + Scan) = 0x80;
+        }
+
+        LPARAM lpDown = 1 | (Scan << 16);
+        LPARAM lpUp = 1 | (Scan << 16) | (1 << 30) | (1 << 31);
+
+        PostMessageA(Hwnd, WM_KEYDOWN, Vk, lpDown);
+        Sleep(60);
+        PostMessageA(Hwnd, WM_KEYUP, Vk, lpUp);
+
+        if (Offsets.KeyBuffer)
+        {
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + Scan) = 0x00;
+        }
     }
 
     void AutoLoginManager::SendClick(HWND Hwnd, int X, int Y)
     {
         LPARAM LParam = MAKELPARAM(X, Y);
         PostMessageA(Hwnd, WM_LBUTTONDOWN, MK_LBUTTON, LParam);
-        Sleep(25);
+        Sleep(35);
         PostMessageA(Hwnd, WM_LBUTTONUP, 0, LParam);
     }
 
@@ -178,9 +193,8 @@ namespace ShaiyaOverlay
     {
         Logger::Info("[AutoLogin] Worker thread started.");
 
-        // Wait for GameOffsets to be ready
-        int WaitOffsets = 30;
-        while (Running && !Offsets.GameStateAddr && WaitOffsets-- > 0)
+        int WaitOffsets = 40;
+        while (Running && (!Offsets.GameStateAddr || !Offsets.LoginPtr) && WaitOffsets-- > 0)
         {
             Sleep(100);
         }
@@ -213,140 +227,181 @@ namespace ShaiyaOverlay
         // STEP 1: Handle Login Screen (State 1)
         if (CurrentState == GameState::Login)
         {
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for login screen UI...");
-            Sleep(1500);
+            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for server handshake...");
+            Logger::Info("[AutoLogin] Waiting for login server RSA handshake...");
+
+            int HandshakeTimeout = 150; // 15 seconds
+            while (Running && HandshakeTimeout-- > 0)
+            {
+                U16 Handshake = 0;
+                if (Offsets.HandshakeStatusAddr && Memory::ReadSafe(Offsets.HandshakeStatusAddr, &Handshake))
+                {
+                    if (Handshake == 0x0101)
+                    {
+                        Logger::Info("[AutoLogin] Handshake confirmed (0x%04X)!", Handshake);
+                        break;
+                    }
+                }
+                Sleep(100);
+            }
 
             if (!Running) return 0;
+            Sleep(500);
 
-            RECT rc;
-            GetClientRect(Hwnd, &rc);
-            int ClientW = rc.right - rc.left;
-            int ClientH = rc.bottom - rc.top;
-            if (ClientW <= 0) ClientW = 1920;
-            if (ClientH <= 0) ClientH = 1080;
+            // Wait for CLogin instance constructor to finish
+            U64 pLogin = 0;
+            int LoginWait = 100;
+            while (Running && !pLogin && LoginWait-- > 0)
+            {
+                U64 candidate = 0;
+                if (Offsets.LoginPtr && Memory::ReadSafe(Offsets.LoginPtr, &candidate) && candidate)
+                {
+                    U32 sig = 0;
+                    if (Memory::ReadSafe(candidate + 35624, &sig) && sig == 1139802112)
+                    {
+                        pLogin = candidate;
+                        break;
+                    }
+                }
+                Sleep(100);
+            }
 
-            int UserBoxX = ClientW / 2;
-            int UserBoxY = ClientH - 260;
+            // Wait 2.5 seconds for full intro fade-in and textures to settle
+            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for login screen to settle...");
+            Sleep(2500);
 
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering credentials...");
-            Logger::Info("[AutoLogin] Focusing username box at (%d, %d)", UserBoxX, UserBoxY);
-            SendClick(Hwnd, UserBoxX, UserBoxY);
+            if (pLogin)
+            {
+                // Defocus text boxes (focus = 2) so engine render loop doesn't wipe our buffers
+                U8 noFocus = 2;
+                Memory::WriteSafe(pLogin + 1576, noFocus);
+
+                // Write Username buffer at pLogin + 8 (35 bytes)
+                char userBuf[35] = { 0 };
+                StringUtils::Copy(userBuf, Config.Username, sizeof(userBuf));
+                Memory::WriteBytesSafe(pLogin + 8, userBuf, sizeof(userBuf));
+
+                // Write Password buffer at pLogin + 43 (35 bytes)
+                char passBuf[35] = { 0 };
+                StringUtils::Copy(passBuf, Config.Password, sizeof(passBuf));
+                Memory::WriteBytesSafe(pLogin + 43, passBuf, sizeof(passBuf));
+
+                // Also write directly to pNet buffers as a safety net
+                if (Offsets.NetworkPtr)
+                {
+                    U64 pNet = 0;
+                    if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
+                    {
+                        Memory::WriteBytesSafe(pNet + 3864, userBuf, sizeof(userBuf));
+                        Memory::WriteBytesSafe(pNet + 3899, passBuf, sizeof(passBuf));
+                    }
+                }
+
+                Logger::Info("[AutoLogin] Submitting credentials in background (user: %s)...", Config.Username);
+                StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Submitting credentials...");
+
+                if (Offsets.SubmitLoginAddr)
+                {
+                    HANDLE hThread = CreateThread(nullptr, 0, [](LPVOID param) -> DWORD {
+                        using SubmitLoginFn = __int64(__fastcall*)(U64 pThis);
+                        auto Fn = reinterpret_cast<SubmitLoginFn>(Offsets.SubmitLoginAddr);
+                        Fn(reinterpret_cast<U64>(param));
+                        return 0;
+                    }, reinterpret_cast<LPVOID>(pLogin), 0, nullptr);
+
+                    if (hThread)
+                    {
+                        WaitForSingleObject(hThread, 4000);
+                        CloseHandle(hThread);
+                    }
+                }
+            }
+            else
+            {
+                Logger::Error("[AutoLogin] CLogin pointer is null!");
+            }
+
+            Sleep(800);
+        }
+
+        // STEP 2: Wait for Server List and select server
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for server list...");
+        int ServerWait = 150; // 15 seconds max
+        U32 ServerCount = 0;
+        U64 pLogin = 0;
+
+        while (Running && ServerWait-- > 0)
+        {
+            if (Offsets.NetworkPtr)
+            {
+                U64 pNet = 0;
+                if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
+                {
+                    Memory::ReadSafe(pNet + 3856, &ServerCount);
+                    if (ServerCount > 0)
+                        break;
+                }
+            }
+            Sleep(100);
+        }
+
+        if (!Running || ServerCount == 0) return 0;
+
+        Logger::Info("[AutoLogin] Server list received (%u servers). Selecting server %u in background...", ServerCount, Config.ServerIndex);
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Selecting server %u...", Config.ServerIndex);
+        Sleep(500);
+
+        if (Offsets.LoginPtr)
+            Memory::ReadSafe(Offsets.LoginPtr, &pLogin);
+
+        U64 pSelectServer = pLogin ? (pLogin + 1584) : 0;
+        if (pSelectServer)
+        {
+            *reinterpret_cast<U32*>(pSelectServer + 6368) = Config.ServerIndex;
+            *reinterpret_cast<U32*>(pSelectServer + 14568) = Config.ServerIndex;
+            *reinterpret_cast<U8*>(pSelectServer + 1128) = 1;
+        }
+
+        // Pulse Enter via internal KeyBuffer (works 100% in background without window focus!)
+        if (Offsets.KeyBuffer)
+        {
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x80;
             Sleep(150);
-
-            // Clear any text in username box
-            for (int i = 0; i < 32 && Running; ++i)
-            {
-                SendKey(Hwnd, VK_BACK);
-                Sleep(8);
-            }
-
-            // Type username
-            for (size_t i = 0; Config.Username[i] != '\0' && Running; ++i)
-            {
-                SendChar(Hwnd, Config.Username[i]);
-                Sleep(25);
-            }
-            Sleep(100);
-
-            // Switch to password
-            SendKey(Hwnd, VK_TAB);
-            Sleep(100);
-
-            // Clear password box
-            for (int i = 0; i < 32 && Running; ++i)
-            {
-                SendKey(Hwnd, VK_BACK);
-                Sleep(8);
-            }
-
-            // Type password
-            for (size_t i = 0; Config.Password[i] != '\0' && Running; ++i)
-            {
-                SendChar(Hwnd, Config.Password[i]);
-                Sleep(25);
-            }
-            Sleep(200);
-
-            Logger::Info("[AutoLogin] Credentials typed. Pressing Enter to submit...");
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Submitting login...");
-            SendKey(Hwnd, VK_RETURN);
-            Sleep(1000);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x00;
         }
+        else
+        {
+            SendKey(Hwnd, VK_RETURN);
+        }
+        Logger::Info("[AutoLogin] Triggered server %u confirmation via KeyBuffer!", Config.ServerIndex);
 
-        // STEP 2: Wait for Server Select (State 3) or Character Select (State 2)
-        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for server select...");
-        int Timeout = 120; // 12 seconds
-        while (Running && Timeout-- > 0)
+        // STEP 3: Wait for Character Select screen to arrive and stop there
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering character select...");
+        int CharSelectWait = 150;
+        U64 pCharSelect = 0;
+
+        while (Running && CharSelectWait-- > 0)
         {
             CurrentState = GetCurrentGameState();
-            if (CurrentState == GameState::ServerSelect ||
-                CurrentState == GameState::CharacterSelect ||
-                CurrentState == GameState::InGame)
+            if (Offsets.CharacterSelectPtr)
+                Memory::ReadSafe(Offsets.CharacterSelectPtr, &pCharSelect);
+
+            if (pCharSelect != 0 || CurrentState == GameState::CharacterSelect)
             {
-                break;
-            }
-            Sleep(100);
-        }
-
-        if (!Running) return 0;
-
-        if (CurrentState == GameState::ServerSelect)
-        {
-            Logger::Info("[AutoLogin] Server Select screen active. Selecting server index %u...", Config.ServerIndex);
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Selecting server %u...", Config.ServerIndex);
-            Sleep(1200);
-
-            // Send Enter to confirm server selection
-            SendKey(Hwnd, VK_RETURN);
-            Sleep(1000);
-        }
-
-        // STEP 3: Wait for Character Select (State 2)
-        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Waiting for character select...");
-        Timeout = 120;
-        while (Running && Timeout-- > 0)
-        {
-            CurrentState = GetCurrentGameState();
-            if (CurrentState == GameState::CharacterSelect || CurrentState == GameState::InGame)
-            {
-                break;
-            }
-            Sleep(100);
-        }
-
-        if (!Running) return 0;
-
-        if (CurrentState == GameState::CharacterSelect)
-        {
-            Logger::Info("[AutoLogin] Character Select screen active. Selecting character slot %u...", Config.CharacterSlot);
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Selecting character slot %u...", Config.CharacterSlot);
-            Sleep(1500);
-
-            // Send Enter to start game with selected character
-            SendKey(Hwnd, VK_RETURN);
-            Sleep(1000);
-        }
-
-        // STEP 4: Wait for In-Game (State 6)
-        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering world...");
-        Timeout = 200; // 20 seconds
-        while (Running && Timeout-- > 0)
-        {
-            CurrentState = GetCurrentGameState();
-            if (CurrentState == GameState::InGame)
-            {
-                Logger::Info("[AutoLogin] Reached In-Game world successfully! Auto-login complete.");
-                StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Completed (In Game)");
+                Logger::Info("[AutoLogin] Character selection screen reached successfully! Pausing automation at Character Select as requested.");
+                StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Na Selecao de Personagens");
                 Running = false;
                 return 0;
             }
-            Sleep(100);
-        }
 
-        if (CurrentState != GameState::InGame)
-        {
-            Logger::Info("[AutoLogin] Finished with GameState: %d (%s)", static_cast<U8>(CurrentState), GetGameStateName(CurrentState));
-            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Done (%s)", GetGameStateName(CurrentState));
+            // Retry pulse KeyBuffer if UI was animating
+            if (Offsets.KeyBuffer)
+            {
+                *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x80;
+                Sleep(100);
+                *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x00;
+            }
+            Sleep(500);
         }
 
         Running = false;
