@@ -233,16 +233,22 @@ namespace ShaiyaOverlay
                     const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
                     for (U32 M = 0; M < Mobs.GetCount(); ++M)
                     {
-                        if (Mobs[M].WorldId == TargetWorldId && Mobs[M].Alive)
-                            return TargetWorldId;
+                        if (Mobs[M].WorldId == TargetWorldId)
+                        {
+                            if (Mobs[M].Alive)
+                                return TargetWorldId;
+                            else
+                                return 0; // Target is dead, do not target corpse
+                        }
                     }
+                    return TargetWorldId;
                 }
             }
         }
         return 0;
     }
 
-    bool SkillManager::CastSkill(U8 LearnedSlot, U8 TargetType)
+    bool SkillManager::CastSkill(U8 LearnedSlot, U8 TargetType, U32 ExplicitTargetId)
     {
         if (!Offsets.CastSkillAddr || LearnedSlot == 0xFF)
             return false;
@@ -256,20 +262,30 @@ namespace ShaiyaOverlay
         }
         else // Enemy spell
         {
-            TargetWorldId = GetSelectedTargetWorldId();
+            if (ExplicitTargetId != 0 && ExplicitTargetId != 0xFFFFFFFF)
+            {
+                TargetWorldId = ExplicitTargetId;
+            }
+            else
+            {
+                TargetWorldId = GetSelectedTargetWorldId();
+            }
+
             if (TargetWorldId == 0)
             {
                 // Auto-target closest alive monster within 25m
                 const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
                 F32 MinDist = 25.0f;
+                U32 BestId = 0;
                 for (U32 M = 0; M < Mobs.GetCount(); ++M)
                 {
                     if (Mobs[M].Alive && Mobs[M].Distance < MinDist)
                     {
                         MinDist = Mobs[M].Distance;
-                        TargetWorldId = Mobs[M].WorldId;
+                        BestId = Mobs[M].WorldId;
                     }
                 }
+                TargetWorldId = BestId;
 
                 if (TargetWorldId != 0 && Offsets.WorldManager)
                 {
@@ -280,6 +296,10 @@ namespace ShaiyaOverlay
                     }
                 }
             }
+
+            // If still no valid alive target, abort rather than sending 0
+            if (TargetWorldId == 0)
+                return false;
         }
 
         using CastSkillFn = void(__fastcall*)(U8 SlotIndex, U32 TargetId);

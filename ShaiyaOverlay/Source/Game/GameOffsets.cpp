@@ -28,7 +28,7 @@ namespace ShaiyaOverlay
         Offsets.MonsterMobId       = 0x30;
         Offsets.MonsterLevel       = 0x34;
         Offsets.MonsterMaxHp       = 0x110;
-        Offsets.MonsterCurrentHp   = 0x10C;
+        Offsets.MonsterCurrentHp   = 0x114;
 
         // CNpc offsets
         Offsets.NpcPosX            = 0x6C;

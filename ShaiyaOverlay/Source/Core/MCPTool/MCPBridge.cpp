@@ -983,9 +983,10 @@ namespace ShaiyaOverlay
             if (extract_json_double(pRequestJson, "target_type", dType))
                 targetType = static_cast<U8>(dType);
 
+            U32 explicitTarget = 0;
             if (extract_json_double(pRequestJson, "target_id", dTarget))
             {
-                U32 explicitTarget = static_cast<U32>(dTarget);
+                explicitTarget = static_cast<U32>(dTarget);
                 if (explicitTarget != 0 && Offsets.WorldManager)
                 {
                     U64 LocalPlayerPtr = 0;
@@ -999,8 +1000,8 @@ namespace ShaiyaOverlay
                 }
             }
 
-            bool ok = SkillManager::CastSkill(static_cast<U8>(slot), targetType);
-            U32 usedTarget = SkillManager::GetSelectedTargetWorldId();
+            bool ok = SkillManager::CastSkill(static_cast<U8>(slot), targetType, explicitTarget);
+            U32 usedTarget = explicitTarget ? explicitTarget : SkillManager::GetSelectedTargetWorldId();
 
             sprintf_s(pResponseJson, nMaxLen,
                 "{\"status\":\"%s\",\"action\":\"cast_skill\",\"slot\":%d,\"target_id\":%u}",
