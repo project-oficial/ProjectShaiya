@@ -54,89 +54,36 @@ namespace ShaiyaOverlay
             return true;
         }
 
-        if (!Offsets.ItemDb)
+        // ponytail: native GetItemRecord handles FNV-1a hash map & lapis transformations; fallback formats Type-TypeId
+        if (Offsets.GetItemRecordAddr && Offsets.ItemDb)
         {
-            StringUtils::Format(OutName, MaxLen, "Item [%u-%u]", Type, TypeId);
-            return false;
-        }
+            using GetItemRecordFn = U64(__fastcall*)(U64 ItemDb, U8 Type, U32 TypeId);
+            auto Fn = reinterpret_cast<GetItemRecordFn>(Offsets.GetItemRecordAddr);
 
-        U64 HeadNode = 0;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 0x10, &HeadNode) || !HeadNode)
-        {
-            StringUtils::Format(OutName, MaxLen, "Item [%u-%u]", Type, TypeId);
-            return false;
-        }
-
-        U64 CurrTypeNode = 0;
-        if (!Memory::ReadSafe(HeadNode, &CurrTypeNode) || !CurrTypeNode)
-        {
-            StringUtils::Format(OutName, MaxLen, "Item [%u-%u]", Type, TypeId);
-            return false;
-        }
-
-        U32 TypeWalk = 0;
-        while (CurrTypeNode && CurrTypeNode != HeadNode && TypeWalk < 128)
-        {
-            U32 NodeKey = 0;
-            Memory::ReadSafe(CurrTypeNode + 16, &NodeKey);
-
-            if (NodeKey == Type)
+            __try
             {
-                U64 InnerHead = 0;
-                Memory::ReadSafe(CurrTypeNode + 32 + 0x10, &InnerHead);
-
-                if (InnerHead)
+                U64 RecPtr = Fn(Offsets.ItemDb, Type, static_cast<U32>(TypeId));
+                if (RecPtr)
                 {
-                    U64 CurrItemNode = 0;
-                    Memory::ReadSafe(InnerHead, &CurrItemNode);
-
-                    U32 ItemWalk = 0;
-                    while (CurrItemNode && CurrItemNode != InnerHead && ItemWalk < 300)
+                    U64 NamePtr = 0;
+                    if (Memory::ReadSafe(RecPtr, &NamePtr) && NamePtr)
                     {
-                        U32 ItemKey = 0;
-                        Memory::ReadSafe(CurrItemNode + 16, &ItemKey);
-
-                        if (ItemKey == TypeId)
+                        char TempName[64] = { 0 };
+                        if (Memory::ReadBytesSafe(NamePtr, TempName, sizeof(TempName) - 1))
                         {
-                            U64 RecPtr = 0;
-                            Memory::ReadSafe(CurrItemNode + 24, &RecPtr);
-
-                            if (RecPtr)
+                            TempName[sizeof(TempName) - 1] = '\0';
+                            if (TempName[0] != '\0')
                             {
-                                U64 Cap = 0;
-                                Memory::ReadSafe(RecPtr + 24, &Cap);
-                                U64 StrSource = RecPtr;
-                                if (Cap > 15)
-                                {
-                                    Memory::ReadSafe(RecPtr, &StrSource);
-                                }
-
-                                if (StrSource)
-                                {
-                                    char TempName[64] = { 0 };
-                                    if (Memory::ReadBytesSafe(StrSource, TempName, sizeof(TempName) - 1))
-                                    {
-                                        TempName[sizeof(TempName) - 1] = '\0';
-                                        if (TempName[0] != '\0')
-                                        {
-                                            StringUtils::Copy(OutName, TempName, MaxLen);
-                                            return true;
-                                        }
-                                    }
-                                }
+                                StringUtils::AnsiToUtf8(TempName, OutName, MaxLen);
+                                return true;
                             }
-                            break;
                         }
-
-                        Memory::ReadSafe(CurrItemNode, &CurrItemNode);
-                        ++ItemWalk;
                     }
                 }
-                break;
             }
-
-            Memory::ReadSafe(CurrTypeNode, &CurrTypeNode);
-            ++TypeWalk;
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+            }
         }
 
         StringUtils::Format(OutName, MaxLen, "%s [%u-%u]", GetCategoryName(Type), Type, TypeId);

@@ -16,18 +16,17 @@ namespace ShaiyaOverlay
         // 28: Special Consumables
         // 29: Special Consumables
         // 31: Town Return Scrolls, Teleport Scrolls
-        // 32: Resurrection Runes, Summoning Runes
         // 38: Mystery Boxes, Gift Packages, Lucky Pouches (Right-click to open)
         // 42: Mounts (Right-click to summon/ride)
         // 43: Pets (Right-click to summon)
-        // 90..100: Event/Special Consumables
+        // 90..110: Event/Special Consumables, EXP Buffs, Service Stones, Resurrection Runes
         if (Type == 25 || Type == 27 || Type == 28 || Type == 29 ||
-            Type == 31 || Type == 32 || Type == 38 || Type == 42 || Type == 43)
+            Type == 31 || Type == 38 || Type == 42 || Type == 43)
         {
             return true;
         }
 
-        if (Type >= 90 && Type <= 100)
+        if (Type >= 90 && Type <= 110)
         {
             return true;
         }

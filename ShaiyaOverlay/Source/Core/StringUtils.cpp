@@ -141,4 +141,20 @@ namespace ShaiyaOverlay
 
         return Substr(NormH, HLen, NormN, NLen) || Substr(NormN, NLen, NormH, HLen);
     }
+
+    void StringUtils::AnsiToUtf8(const char* AnsiStr, char* Utf8Str, U32 MaxLen)
+    {
+        if (!AnsiStr || !Utf8Str || MaxLen == 0) return;
+        wchar_t WBuf[128] = { 0 };
+        int WLen = MultiByteToWideChar(CP_ACP, 0, AnsiStr, -1, WBuf, 128);
+        if (WLen > 0)
+        {
+            WideCharToMultiByte(CP_UTF8, 0, WBuf, -1, Utf8Str, static_cast<int>(MaxLen), nullptr, nullptr);
+            Utf8Str[MaxLen - 1] = '\0';
+        }
+        else
+        {
+            Copy(Utf8Str, AnsiStr, MaxLen);
+        }
+    }
 }

@@ -359,6 +359,13 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  SelectSlotAddr  : FAILED (AOB not found)");
 
+        // 31. GetItemRecordAddr (CItemDb_GetItemRecord)
+        Offsets.GetItemRecordAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 45 33 D2 45 8B D8 0F B6 C2 48 8B D9 80 FA 1E 75");
+        if (Offsets.GetItemRecordAddr)
+            Logger::Info("  GetItemRecord   : 0x%llX", Offsets.GetItemRecordAddr);
+        else
+            Logger::Error("  GetItemRecord   : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -390,12 +397,13 @@ namespace ShaiyaOverlay
                        Offsets.HandshakeStatusAddr &&
                        Offsets.SubmitLoginAddr &&
                        Offsets.ConfirmServerAddr &&
-                       Offsets.SelectSlotAddr;
+                       Offsets.SelectSlotAddr &&
+                       Offsets.GetItemRecordAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 30 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 31 AOB patterns resolved successfully.");
 
         return Success;
     }
