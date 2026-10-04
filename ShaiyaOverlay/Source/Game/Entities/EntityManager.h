@@ -17,6 +17,8 @@ namespace ShaiyaOverlay
 
         static bool ResolveMonsterInfo(U16 MobId, char* OutName, U32 MaxLen, U16* OutLevel = nullptr);
         static U16 FindMobIdByMatchingName(const char* NameQuery, char* OutFullName = nullptr, U32 MaxLen = 0);
+        static bool IsQuestMob(U32 MobId);
+        static U16 FindMobIdByQuestDrop(U8 ItemType, U8 ItemTypeId, char* OutName = nullptr, U32 MaxLen = 0);
 
     private:
         static void UpdateLocalPlayer(U64 ImageBase);

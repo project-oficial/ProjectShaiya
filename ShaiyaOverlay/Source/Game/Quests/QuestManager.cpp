@@ -286,21 +286,30 @@ namespace ShaiyaOverlay
 
                         GroundItemManager::ResolveItemName(IType, ITypeId, Obj.ItemName, sizeof(Obj.ItemName));
 
-                        // Try each extracted tag to see if it matches a mob in ItemDb
-                        for (U32 T = 0; T < FoundTags; ++T)
+                        // 1. Check native quest item drop mapping directly from ItemDb monster definitions
+                        U16 DroppedMid = EntityManager::FindMobIdByQuestDrop(IType, ITypeId, Obj.DroppedByMobName, sizeof(Obj.DroppedByMobName));
+                        if (DroppedMid > 0)
                         {
-                            U16 Mid = EntityManager::FindMobIdByMatchingName(TargetTags[T], Obj.DroppedByMobName, sizeof(Obj.DroppedByMobName));
-                            if (Mid > 0)
-                            {
-                                Obj.DroppedByMobId = Mid;
-                                break;
-                            }
+                            Obj.DroppedByMobId = DroppedMid;
                         }
-
-                        // Fallback: If no tag matched a mob, try matching with item name
-                        if (Obj.DroppedByMobId == 0 && Obj.ItemName[0] != '\0')
+                        else
                         {
-                            Obj.DroppedByMobId = EntityManager::FindMobIdByMatchingName(Obj.ItemName, Obj.DroppedByMobName, sizeof(Obj.DroppedByMobName));
+                            // 2. Try each extracted tag to see if it matches a mob in ItemDb
+                            for (U32 T = 0; T < FoundTags; ++T)
+                            {
+                                U16 Mid = EntityManager::FindMobIdByMatchingName(TargetTags[T], Obj.DroppedByMobName, sizeof(Obj.DroppedByMobName));
+                                if (Mid > 0)
+                                {
+                                    Obj.DroppedByMobId = Mid;
+                                    break;
+                                }
+                            }
+
+                            // 3. Fallback: If no tag matched a mob, try matching with item name
+                            if (Obj.DroppedByMobId == 0 && Obj.ItemName[0] != '\0')
+                            {
+                                Obj.DroppedByMobId = EntityManager::FindMobIdByMatchingName(Obj.ItemName, Obj.DroppedByMobName, sizeof(Obj.DroppedByMobName));
+                            }
                         }
 
                         Quest.ItemObjectiveCount++;

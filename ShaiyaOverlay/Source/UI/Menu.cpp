@@ -259,7 +259,14 @@ namespace ShaiyaOverlay
                     ImGui::Text("%u", Mob.MobId);
 
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s", Mob.Name);
+                    if (Mob.IsQuestTarget)
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.35f, 1.0f, 1.0f), "[QUEST] %s", Mob.Name);
+                    }
+                    else
+                    {
+                        ImGui::Text("%s", Mob.Name);
+                    }
 
                     ImGui::TableSetColumnIndex(2);
                     ImGui::Text("%u", Mob.Level);
@@ -550,12 +557,24 @@ namespace ShaiyaOverlay
                             }
                             for (U32 O = 0; O < Q.ItemObjectiveCount; ++O)
                             {
-                                char SingleObj[64];
-                                StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u%s",
-                                    Q.ItemObjectives[O].ItemName,
-                                    Q.ItemObjectives[O].CurrentCount,
-                                    Q.ItemObjectives[O].CountNeeded,
-                                    O + 1 < Q.ItemObjectiveCount ? ", " : "");
+                                char SingleObj[96];
+                                if (Q.ItemObjectives[O].DroppedByMobName[0] != '\0')
+                                {
+                                    StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u (%s)%s",
+                                        Q.ItemObjectives[O].ItemName,
+                                        Q.ItemObjectives[O].CurrentCount,
+                                        Q.ItemObjectives[O].CountNeeded,
+                                        Q.ItemObjectives[O].DroppedByMobName,
+                                        O + 1 < Q.ItemObjectiveCount ? ", " : "");
+                                }
+                                else
+                                {
+                                    StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u%s",
+                                        Q.ItemObjectives[O].ItemName,
+                                        Q.ItemObjectives[O].CurrentCount,
+                                        Q.ItemObjectives[O].CountNeeded,
+                                        O + 1 < Q.ItemObjectiveCount ? ", " : "");
+                                }
                                 StringUtils::Copy(ObjText + StringUtils::Length(ObjText), SingleObj, sizeof(ObjText) - StringUtils::Length(ObjText));
                             }
                             ImGui::Text("%s", ObjText);

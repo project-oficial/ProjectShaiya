@@ -366,6 +366,14 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  GetItemRecord   : FAILED (AOB not found)");
 
+        // 32. QuestMobSet (active quest mob IDs std::set)
+        U64 MatchQuestMobs = PatternScanner::ScanModule(nullptr, "8B 53 30 4C 8B 05 ? ? ? ? 49 8B 40 08");
+        Offsets.QuestMobSet = MatchQuestMobs ? PatternScanner::RipRelative(MatchQuestMobs + 3, 3, 7) : 0;
+        if (Offsets.QuestMobSet)
+            Logger::Info("  QuestMobSet     : 0x%llX", Offsets.QuestMobSet);
+        else
+            Logger::Error("  QuestMobSet     : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -398,12 +406,13 @@ namespace ShaiyaOverlay
                        Offsets.SubmitLoginAddr &&
                        Offsets.ConfirmServerAddr &&
                        Offsets.SelectSlotAddr &&
-                       Offsets.GetItemRecordAddr;
+                       Offsets.GetItemRecordAddr &&
+                       Offsets.QuestMobSet;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 31 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 32 AOB patterns resolved successfully.");
 
         return Success;
     }

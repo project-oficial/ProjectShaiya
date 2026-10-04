@@ -25,6 +25,7 @@ namespace ShaiyaOverlay
         char Name[64];
         ThreatLevel Threat;
         bool Alive;
+        bool IsQuestTarget;
 
         F32 GetHpPercentage() const
         {

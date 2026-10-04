@@ -230,14 +230,19 @@ def auto_login(username: Optional[str] = None, password: Optional[str] = None) -
 
 
 def walk_to_target(target_type: str = "any", name_filter: Optional[str] = None, stop_distance: float = 2.5) -> Dict[str, Any]:
-    """Finds nearest NPC, monster or item (optionally matching name_filter) and starts pathfinding walk_to."""
-    ents = query_entities(type_filter="all" if target_type == "any" else target_type, max_distance=500.0, limit=100)
+    """Finds nearest NPC, monster, quest mob or item (optionally matching name_filter) and starts pathfinding walk_to."""
+    is_quest_filter = (target_type in ["quest", "quest_mob"])
+    effective_type = "monster" if is_quest_filter else target_type
+    ents = query_entities(type_filter="all" if effective_type == "any" else effective_type, max_distance=500.0, limit=100)
     if not ents.get("entities"):
         return {"status": "error", "message": f"No {target_type} found in range"}
 
     best_ent = None
     for e in ents["entities"]:
-        if target_type != "any" and e.get("type") != target_type:
+        if is_quest_filter:
+            if not e.get("is_quest"):
+                continue
+        elif target_type != "any" and e.get("type") != target_type:
             continue
         if name_filter:
             if name_filter.lower() not in e.get("name", "").lower():

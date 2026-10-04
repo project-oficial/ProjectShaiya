@@ -345,9 +345,10 @@ namespace ShaiyaOverlay
 
                         char itemBuf[256];
                         int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
-                            "%s{\"type\":\"monster\",\"world_id\":%u,\"mob_id\":%u,\"name\":\"%s\",\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"pos\":[%.1f,%.1f,%.1f],\"distance\":%.1f}",
+                            "%s{\"type\":\"monster\",\"world_id\":%u,\"mob_id\":%u,\"name\":\"%s\",\"level\":%u,\"hp\":%u,\"max_hp\":%u,\"is_quest\":%s,\"pos\":[%.1f,%.1f,%.1f],\"distance\":%.1f}",
                             (returnedCount > 0) ? "," : "",
                             mob.WorldId, mob.MobId, safeName, mob.Level, mob.CurrentHp, mob.MaxHp,
+                            mob.IsQuestTarget ? "true" : "false",
                             mob.Position.X, mob.Position.Y, mob.Position.Z, mob.Distance
                         );
 
@@ -454,12 +455,15 @@ namespace ShaiyaOverlay
                 bool found = false;
 
                 // Check monsters
-                if (strcmp(targetType, "any") == 0 || strcmp(targetType, "monster") == 0)
+                if (strcmp(targetType, "any") == 0 || strcmp(targetType, "monster") == 0 || strcmp(targetType, "quest") == 0 || strcmp(targetType, "quest_mob") == 0)
                 {
+                    bool questOnly = (strcmp(targetType, "quest") == 0 || strcmp(targetType, "quest_mob") == 0);
                     const auto& monsters = EntityManager::GetNearbyMonsters();
                     for (U32 i = 0; i < monsters.GetCount(); ++i)
                     {
                         const auto& mob = monsters[i];
+                        if (questOnly && !mob.IsQuestTarget)
+                            continue;
                         if (mob.CurrentHp > 0 && mob.Distance < fMinDist)
                         {
                             fMinDist = mob.Distance;

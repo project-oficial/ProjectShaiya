@@ -46,7 +46,7 @@ namespace ShaiyaOverlay
                     char Temp[64] = { 0 };
                     if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                     {
-                        StringUtils::Copy(OutName, Temp, MaxLen);
+                        StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
                         return true;
                     }
                 }
@@ -69,7 +69,7 @@ namespace ShaiyaOverlay
                         char Temp[64] = { 0 };
                         if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                         {
-                            StringUtils::Copy(OutName, Temp, MaxLen);
+                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
                             return true;
                         }
                     }
@@ -80,6 +80,109 @@ namespace ShaiyaOverlay
         }
 
         return false;
+    }
+
+    bool EntityManager::IsQuestMob(U32 MobId)
+    {
+        if (!Offsets.QuestMobSet || MobId == 0)
+            return false;
+
+        U64 HeadNode = 0;
+        if (!Memory::ReadSafe(Offsets.QuestMobSet, &HeadNode) || !HeadNode)
+            return false;
+
+        U64 Size = 0;
+        if (!Memory::ReadSafe(Offsets.QuestMobSet + 8, &Size) || Size == 0)
+            return false;
+
+        U64 RootNode = 0;
+        if (!Memory::ReadSafe(HeadNode + 8, &RootNode) || !RootNode || RootNode == HeadNode)
+            return false;
+
+        U64 Curr = RootNode;
+        U32 Depth = 0;
+        while (Curr && Curr != HeadNode && Depth++ < 64)
+        {
+            U8 IsNil = 1;
+            Memory::ReadSafe(Curr + 25, &IsNil);
+            if (IsNil != 0)
+                break;
+
+            U32 Key = 0;
+            if (!Memory::ReadSafe(Curr + 28, &Key))
+                break;
+
+            if (MobId == Key)
+                return true;
+
+            if (MobId < Key)
+                Memory::ReadSafe(Curr, &Curr); // _Left
+            else
+                Memory::ReadSafe(Curr + 16, &Curr); // _Right
+        }
+
+        return false;
+    }
+
+    U16 EntityManager::FindMobIdByQuestDrop(U8 ItemType, U8 ItemTypeId, char* OutName, U32 MaxLen)
+    {
+        if (!Offsets.ItemDb || ItemType == 0 || ItemTypeId == 0)
+            return 0;
+
+        U16 TargetDropVal = 0;
+        if (ItemType == 27) TargetDropVal = ItemTypeId;
+        else if (ItemType == 28) TargetDropVal = 1000 + ItemTypeId;
+        else if (ItemType == 29) TargetDropVal = 2000 + ItemTypeId;
+        else if (ItemType == 99) TargetDropVal = 3000 + ItemTypeId;
+        else return 0;
+
+        U64 NilNode = 0;
+        U64 BucketsPtr = 0;
+        U64 Mask = 0;
+
+        if (!Memory::ReadSafe(Offsets.ItemDb + 34 * 8, &NilNode)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 36 * 8, &BucketsPtr)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 39 * 8, &Mask)) return 0;
+
+        U32 BucketCount = static_cast<U32>(Mask + 1);
+        if (BucketCount > 16384) BucketCount = 16384;
+
+        for (U32 B = 0; B < BucketCount; ++B)
+        {
+            U64 FirstInBucket = 0;
+            U64 BucketEntry = 0;
+            if (!Memory::ReadSafe(BucketsPtr + B * 16, &FirstInBucket)) continue;
+            if (!Memory::ReadSafe(BucketsPtr + B * 16 + 8, &BucketEntry)) continue;
+
+            U64 Node = BucketEntry;
+            U32 Walk = 0;
+            while (Node && Node != NilNode && Walk < 64)
+            {
+                U32 Key = 0;
+                U16 DropVal = 0;
+                U64 NamePtr = 0;
+                Memory::ReadSafe(Node + 16, &Key);
+                Memory::ReadSafe(Node + 24, &NamePtr);
+                Memory::ReadSafe(Node + 24 + 44, &DropVal);
+
+                if (DropVal == TargetDropVal && Key > 0)
+                {
+                    if (NamePtr && OutName && MaxLen > 0)
+                    {
+                        char Temp[64] = { 0 };
+                        if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
+                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                    }
+                    return static_cast<U16>(Key);
+                }
+
+                if (Node == FirstInBucket) break;
+                if (!Memory::ReadSafe(Node + 8, &Node)) break;
+                ++Walk;
+            }
+        }
+
+        return 0;
     }
 
     U16 EntityManager::FindMobIdByMatchingName(const char* NameQuery, char* OutFullName, U32 MaxLen)
@@ -249,6 +352,8 @@ namespace ShaiyaOverlay
                 {
                     Entity.Level = ResolvedLvl;
                 }
+
+                Entity.IsQuestTarget = IsQuestMob(Entity.MobId);
 
                 // Simple threat grading
                 if (!Entity.Alive)

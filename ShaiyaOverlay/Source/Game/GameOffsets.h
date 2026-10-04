@@ -45,6 +45,7 @@ namespace ShaiyaOverlay
         U64 ConfirmServerAddr;
         U64 SelectSlotAddr;
         U64 GetItemRecordAddr;
+        U64 QuestMobSet;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;
