@@ -46,6 +46,8 @@ namespace ShaiyaOverlay
         U64 SelectSlotAddr;
         U64 GetItemRecordAddr;
         U64 QuestMobSet;
+        U64 MainUIPtr;
+        U64 GetSkillRecordAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;

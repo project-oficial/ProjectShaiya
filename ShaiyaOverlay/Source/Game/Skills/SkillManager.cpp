@@ -27,6 +27,45 @@ namespace ShaiyaOverlay
         if (!Offsets.ItemDb)
             return false;
 
+        // Fast path: call native GetSkillRecord function
+        if (Offsets.GetSkillRecordAddr && Offsets.ItemDb)
+        {
+            using GetSkillRecordFn = U64(__fastcall*)(U64 ItemDb, U16 SkillId, U8 Level);
+            auto Fn = reinterpret_cast<GetSkillRecordFn>(Offsets.GetSkillRecordAddr);
+
+            __try
+            {
+                U64 RecPtr = Fn(Offsets.ItemDb, SkillId, static_cast<U8>(Level));
+                if (RecPtr)
+                {
+                    U64 NamePtr = 0;
+                    if (Memory::ReadSafe(RecPtr + 8, &NamePtr) && NamePtr)
+                    {
+                        char Temp[64] = { 0 };
+                        if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
+                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                    }
+
+                    U8 Cat = 0;
+                    U8 TType = 0;
+                    U16 BaseCd = 0;
+                    Memory::ReadSafe(RecPtr + 50, &Cat);
+                    Memory::ReadSafe(RecPtr + 62, &TType);
+                    Memory::ReadSafe(RecPtr + 88, &BaseCd);
+
+                    if (OutPassive) *OutPassive = (Cat == 10);
+                    if (OutTargetType) *OutTargetType = TType;
+                    if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
+
+                    if (OutName[0] != '\0')
+                        return true;
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+            }
+        }
+
         U64 SkillMapBase = Offsets.ItemDb + 0x88;
         U64 NilNode = 0;
         U64 BucketsPtr = 0;

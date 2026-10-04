@@ -215,6 +215,15 @@ def query_inventory() -> Dict[str, Any]:
     return res
 
 
+def query_buffs() -> Dict[str, Any]:
+    """Retrieves all active player buffs and debuffs with level, duration remaining, and name."""
+    res = send_pipe_command({"cmd": "get_buffs"})
+    if res is None:
+        return {"status": "offline", "game_connected": False, "buff_count": 0, "buffs": []}
+    res["game_connected"] = True
+    return res
+
+
 def auto_login(username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
     """Triggers or checks the automatic login state machine."""
     cmd_data = {"cmd": "auto_login"}

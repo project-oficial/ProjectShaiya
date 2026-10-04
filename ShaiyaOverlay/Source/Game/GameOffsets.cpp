@@ -374,6 +374,21 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  QuestMobSet     : FAILED (AOB not found)");
 
+        // 33. MainUIPtr (g_pMainUI / g_pGame)
+        U64 MatchMainUI = PatternScanner::ScanModule(nullptr, "48 8B 1D ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? 48 8D 0D");
+        Offsets.MainUIPtr = MatchMainUI ? PatternScanner::RipRelative(MatchMainUI, 3, 7) : 0;
+        if (Offsets.MainUIPtr)
+            Logger::Info("  MainUIPtr       : 0x%llX", Offsets.MainUIPtr);
+        else
+            Logger::Error("  MainUIPtr       : FAILED (AOB not found)");
+
+        // 34. GetSkillRecordAddr (CItemDb_GetSkillRecord)
+        Offsets.GetSkillRecordAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 4C 8B 91 90 00 00 00 48 B8 B3 01 00 00 00 01 00 00");
+        if (Offsets.GetSkillRecordAddr)
+            Logger::Info("  GetSkillRecord  : 0x%llX", Offsets.GetSkillRecordAddr);
+        else
+            Logger::Error("  GetSkillRecord  : FAILED (AOB not found)");
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&
@@ -407,12 +422,14 @@ namespace ShaiyaOverlay
                        Offsets.ConfirmServerAddr &&
                        Offsets.SelectSlotAddr &&
                        Offsets.GetItemRecordAddr &&
-                       Offsets.QuestMobSet;
+                       Offsets.QuestMobSet &&
+                       Offsets.MainUIPtr &&
+                       Offsets.GetSkillRecordAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
         else
-            Logger::Info("GameOffsets: All 32 AOB patterns resolved successfully.");
+            Logger::Info("GameOffsets: All 34 AOB patterns resolved successfully.");
 
         return Success;
     }

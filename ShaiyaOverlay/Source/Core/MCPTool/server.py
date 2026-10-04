@@ -113,6 +113,12 @@ def shaiya_get_inventory() -> dict:
 
 
 @mcp.tool()
+def shaiya_get_buffs() -> dict:
+    """List all active player buffs and debuffs with level, remaining duration and effect name."""
+    return mcp_client.query_buffs()
+
+
+@mcp.tool()
 def shaiya_auto_login(username: str = "", password: str = "") -> dict:
     """Automatically logs into account, selects server, and chooses character.
     If username/password are empty, uses credentials from auto_login.ini.

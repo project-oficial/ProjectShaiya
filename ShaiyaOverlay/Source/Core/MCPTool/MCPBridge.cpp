@@ -11,6 +11,7 @@
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
 #include "Game/Skills/SkillManager.h"
+#include "Game/Buffs/BuffManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "UI/Menu.h"
 
@@ -1028,6 +1029,36 @@ namespace ShaiyaOverlay
             sprintf_s(pResponseJson + offset, nMaxLen - offset, "]}");
         }
 
+        static void HandleGetBuffs(char* pResponseJson, size_t nMaxLen)
+        {
+            BuffManager::Update();
+            const auto& buffs = BuffManager::GetBuffs();
+            size_t offset = sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"buff_count\":%u,\"buffs\":[", buffs.GetCount());
+
+            for (U32 i = 0; i < buffs.GetCount(); ++i)
+            {
+                const auto& b = buffs[i];
+                char itemBuf[256];
+                char safeName[64] = { 0 };
+                sanitize_string(b.Name, safeName, sizeof(safeName));
+
+                int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
+                    "%s{\"id\":%u,\"level\":%u,\"name\":\"%s\",\"duration_sec\":%u,\"total_sec\":%u,\"is_debuff\":%s}",
+                    (i > 0) ? "," : "",
+                    b.BuffId, b.Level, safeName,
+                    b.DurationSeconds, b.TotalDurationSeconds,
+                    b.IsDebuff ? "true" : "false"
+                );
+
+                if (itemLen > 0 && (offset + itemLen + 32) < nMaxLen)
+                {
+                    memcpy(pResponseJson + offset, itemBuf, itemLen);
+                    offset += itemLen;
+                }
+            }
+            sprintf_s(pResponseJson + offset, nMaxLen - offset, "]}");
+        }
+
         static void HandleSelectTarget(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
         {
             double d = 0;
@@ -1162,6 +1193,10 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "get_inventory") == 0)
             {
                 HandleGetInventory(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_buffs") == 0)
+            {
+                HandleGetBuffs(pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "get_navigation") == 0)
             {

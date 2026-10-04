@@ -1003,7 +1003,16 @@ namespace ShaiyaOverlay
                         ImGui::Text("%u", Buff.Level);
 
                         ImGui::TableSetColumnIndex(3);
-                        ImGui::Text("%us", Buff.DurationSeconds);
+                        if (Buff.DurationSeconds >= 60)
+                        {
+                            U32 Min = Buff.DurationSeconds / 60;
+                            U32 Sec = Buff.DurationSeconds % 60;
+                            ImGui::Text("%um %02us", Min, Sec);
+                        }
+                        else
+                        {
+                            ImGui::Text("%us", Buff.DurationSeconds);
+                        }
                     }
                 }
 
