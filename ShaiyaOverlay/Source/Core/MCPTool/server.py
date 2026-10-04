@@ -107,6 +107,12 @@ def shaiya_use_quickslot(slot: int) -> dict:
 
 
 @mcp.tool()
+def shaiya_get_inventory() -> dict:
+    """List player inventory items with bag, slot, count, item name and consumable status."""
+    return mcp_client.query_inventory()
+
+
+@mcp.tool()
 def shaiya_auto_login(username: str = "", password: str = "") -> dict:
     """Automatically logs into account, selects server, and chooses character.
     If username/password are empty, uses credentials from auto_login.ini.

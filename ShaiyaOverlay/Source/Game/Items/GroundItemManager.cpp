@@ -98,19 +98,30 @@ namespace ShaiyaOverlay
 
                         if (ItemKey == TypeId)
                         {
-                            U64 NamePtr = 0;
-                            Memory::ReadSafe(CurrItemNode + 24, &NamePtr);
+                            U64 RecPtr = 0;
+                            Memory::ReadSafe(CurrItemNode + 24, &RecPtr);
 
-                            if (NamePtr)
+                            if (RecPtr)
                             {
-                                char TempName[64] = { 0 };
-                                if (Memory::ReadBytesSafe(NamePtr, TempName, sizeof(TempName) - 1))
+                                U64 Cap = 0;
+                                Memory::ReadSafe(RecPtr + 24, &Cap);
+                                U64 StrSource = RecPtr;
+                                if (Cap > 15)
                                 {
-                                    TempName[sizeof(TempName) - 1] = '\0';
-                                    if (TempName[0] != '\0')
+                                    Memory::ReadSafe(RecPtr, &StrSource);
+                                }
+
+                                if (StrSource)
+                                {
+                                    char TempName[64] = { 0 };
+                                    if (Memory::ReadBytesSafe(StrSource, TempName, sizeof(TempName) - 1))
                                     {
-                                        StringUtils::Copy(OutName, TempName, MaxLen);
-                                        return true;
+                                        TempName[sizeof(TempName) - 1] = '\0';
+                                        if (TempName[0] != '\0')
+                                        {
+                                            StringUtils::Copy(OutName, TempName, MaxLen);
+                                            return true;
+                                        }
                                     }
                                 }
                             }

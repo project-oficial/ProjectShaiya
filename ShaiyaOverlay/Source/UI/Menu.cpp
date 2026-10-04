@@ -9,6 +9,7 @@
 #include "Game/Buffs/BuffManager.h"
 #include "Game/Combat/RiskCalculator.h"
 #include "Game/Items/GroundItemManager.h"
+#include "Game/Items/InventoryManager.h"
 #include "Game/QuickSlots/QuickSlotManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
@@ -55,6 +56,7 @@ namespace ShaiyaOverlay
         SkillManager::Update();
         BuffManager::Update();
         GroundItemManager::Update();
+        InventoryManager::Update();
         QuickSlotManager::Update();
         QuestManager::Update();
         NavigationManager::Update();
@@ -121,6 +123,7 @@ namespace ShaiyaOverlay
         RenderOverviewWindow();
         RenderEntitiesWindow();
         RenderGroundItemsWindow();
+        RenderInventoryWindow();
         RenderSkillsWindow();
         RenderQuickSlotsWindow();
         RenderQuestsWindow();
@@ -403,6 +406,73 @@ namespace ShaiyaOverlay
                         {
                             NavigationManager::WalkTo(Item.Position, Item.Name, 1.5f);
                         }
+                    }
+                }
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+    }
+
+    void Menu::RenderInventoryWindow()
+    {
+        const FixedList<InventoryItem, 128>& Items = InventoryManager::GetItems();
+        U32 ItemCount = Items.GetCount();
+
+        ImGui::SetNextWindowPos(ImVec2(10.0f, 535.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(480.0f, 250.0f), ImGuiCond_FirstUseEver);
+
+        if (ImGui::Begin("Player Inventory"))
+        {
+            ImGui::Text("Itens no Inventário: %u", ItemCount);
+            ImGui::Separator();
+
+            if (ImGui::BeginTable("InventoryTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            {
+                ImGui::TableSetupColumn("Bolsa", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+                ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("Nome", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Qtd", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("Tipo", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+                ImGui::TableSetupColumn("Consumível", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableHeadersRow();
+
+                for (U32 i = 0; i < ItemCount; ++i)
+                {
+                    const auto& Item = Items[i];
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Bolsa %u", Item.Bag);
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%u", Item.Slot);
+
+                    ImGui::TableSetColumnIndex(2);
+                    if (Item.IsConsumable)
+                    {
+                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", Item.Name);
+                    }
+                    else
+                    {
+                        ImGui::Text("%s", Item.Name);
+                    }
+
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%u", Item.Count);
+
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("[%u-%u]", Item.Type, Item.TypeId);
+
+                    ImGui::TableSetColumnIndex(5);
+                    if (Item.IsConsumable)
+                    {
+                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "Sim");
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("Não");
                     }
                 }
 

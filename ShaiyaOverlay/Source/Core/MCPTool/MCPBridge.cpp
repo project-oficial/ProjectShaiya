@@ -7,6 +7,7 @@
 #include "Game/GameOffsets.h"
 #include "Game/Entities/EntityManager.h"
 #include "Game/Items/GroundItemManager.h"
+#include "Game/Items/InventoryManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
 #include "Game/Skills/SkillManager.h"
@@ -992,6 +993,37 @@ namespace ShaiyaOverlay
             sprintf_s(pResponseJson + offset, nMaxLen - offset, "]}");
         }
 
+        static void HandleGetInventory(char* pResponseJson, size_t nMaxLen)
+        {
+            InventoryManager::Update();
+            const auto& items = InventoryManager::GetItems();
+            size_t offset = sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"item_count\":%u,\"items\":[", items.GetCount());
+
+            for (U32 i = 0; i < items.GetCount(); ++i)
+            {
+                const auto& item = items[i];
+                char itemBuf[256];
+                char safeName[64] = { 0 };
+                sanitize_string(item.Name, safeName, sizeof(safeName));
+
+                int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
+                    "%s{\"bag\":%u,\"slot\":%u,\"global_slot\":%u,\"type\":%u,\"type_id\":%u,\"count\":%u,\"is_consumable\":%s,\"name\":\"%s\"}",
+                    (i > 0) ? "," : "",
+                    item.Bag, item.Slot, item.GlobalIndex,
+                    item.Type, item.TypeId, item.Count,
+                    item.IsConsumable ? "true" : "false",
+                    safeName
+                );
+
+                if (itemLen > 0 && (offset + itemLen + 32) < nMaxLen)
+                {
+                    memcpy(pResponseJson + offset, itemBuf, itemLen);
+                    offset += itemLen;
+                }
+            }
+            sprintf_s(pResponseJson + offset, nMaxLen - offset, "]}");
+        }
+
         static void HandleSelectTarget(const char* pRequestJson, char* pResponseJson, size_t nMaxLen)
         {
             double d = 0;
@@ -1122,6 +1154,10 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "get_skills") == 0)
             {
                 HandleGetSkills(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_inventory") == 0)
+            {
+                HandleGetInventory(pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "get_navigation") == 0)
             {

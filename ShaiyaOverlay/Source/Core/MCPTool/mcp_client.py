@@ -206,6 +206,15 @@ def use_quickslot(slot: int) -> Dict[str, Any]:
     return res
 
 
+def query_inventory() -> Dict[str, Any]:
+    """Retrieves all player inventory items with bag, slot, count, name, and consumable status."""
+    res = send_pipe_command({"cmd": "get_inventory"})
+    if res is None:
+        return {"status": "offline", "game_connected": False, "item_count": 0, "items": []}
+    res["game_connected"] = True
+    return res
+
+
 def auto_login(username: Optional[str] = None, password: Optional[str] = None) -> Dict[str, Any]:
     """Triggers or checks the automatic login state machine."""
     cmd_data = {"cmd": "auto_login"}

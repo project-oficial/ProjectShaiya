@@ -18,6 +18,7 @@ namespace ShaiyaOverlay
         static void RenderOverviewWindow();
         static void RenderEntitiesWindow();
         static void RenderGroundItemsWindow();
+        static void RenderInventoryWindow();
         static void RenderSkillsWindow();
         static void RenderQuickSlotsWindow();
         static void RenderQuestsWindow();
