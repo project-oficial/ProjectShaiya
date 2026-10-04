@@ -3,6 +3,7 @@
 #include "Core/Memory.h"
 #include "Core/StringUtils.h"
 #include "Game/GameOffsets.h"
+#include "Game/Entities/EntityManager.h"
 #include "Hooks/WndProcHook.h"
 #include <stdio.h>
 
@@ -213,6 +214,13 @@ namespace ShaiyaOverlay
             return 0;
         }
 
+        // Wait for game engine to leave Unknown state (state 0) and reach Login or InGame
+        int StateWait = 150;
+        while (Running && GetCurrentGameState() == GameState::Unknown && StateWait-- > 0)
+        {
+            Sleep(100);
+        }
+
         GameState CurrentState = GetCurrentGameState();
         Logger::Info("[AutoLogin] Initial GameState: %d (%s)", static_cast<U8>(CurrentState), GetGameStateName(CurrentState));
 
@@ -362,20 +370,21 @@ namespace ShaiyaOverlay
             *reinterpret_cast<U8*>(pSelectServer + 1128) = 1;
         }
 
-        // Pulse Enter via internal KeyBuffer (works 100% in background without window focus!)
+        // Signal Enter via both KeyBuffer and PostMessage (ensures background operation works)
         if (Offsets.KeyBuffer)
         {
             *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x80;
-            Sleep(150);
+        }
+        PostMessageA(Hwnd, WM_KEYDOWN, VK_RETURN, 1 | (0x1C << 16));
+        Sleep(100);
+        PostMessageA(Hwnd, WM_KEYUP, VK_RETURN, 1 | (0x1C << 16) | (1 << 30) | (1 << 31));
+        if (Offsets.KeyBuffer)
+        {
             *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x00;
         }
-        else
-        {
-            SendKey(Hwnd, VK_RETURN);
-        }
-        Logger::Info("[AutoLogin] Triggered server %u confirmation via KeyBuffer!", Config.ServerIndex);
+        Logger::Info("[AutoLogin] Triggered server %u confirmation!", Config.ServerIndex);
 
-        // STEP 3: Wait for Character Select screen to arrive and stop there
+        // STEP 3: Wait for Character Select and enter world with slot
         StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering character select...");
         int CharSelectWait = 150;
         U64 pCharSelect = 0;
@@ -388,20 +397,113 @@ namespace ShaiyaOverlay
 
             if (pCharSelect != 0 || CurrentState == GameState::CharacterSelect)
             {
-                Logger::Info("[AutoLogin] Character selection screen reached successfully! Pausing automation at Character Select as requested.");
-                StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Na Selecao de Personagens");
-                Running = false;
-                return 0;
+                break;
             }
 
-            // Retry pulse KeyBuffer if UI was animating
+            // Retry signal if server select UI was still animating
             if (Offsets.KeyBuffer)
             {
                 *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x80;
-                Sleep(100);
+            }
+            PostMessageA(Hwnd, WM_KEYDOWN, VK_RETURN, 1 | (0x1C << 16));
+            Sleep(80);
+            PostMessageA(Hwnd, WM_KEYUP, VK_RETURN, 1 | (0x1C << 16) | (1 << 30) | (1 << 31));
+            if (Offsets.KeyBuffer)
+            {
                 *reinterpret_cast<U8*>(Offsets.KeyBuffer + 0x1C) = 0x00;
             }
             Sleep(500);
+        }
+
+        if (!Running) return 0;
+
+        if (pCharSelect != 0 || CurrentState == GameState::CharacterSelect)
+        {
+            Sleep(600);
+
+            // Determine target slot
+            U32 TargetSlot = Config.CharacterSlot; // default 0
+
+            // Auto-detect populated character slot in pNet if target slot is empty
+            if (Offsets.NetworkPtr)
+            {
+                U64 pNet = 0;
+                if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
+                {
+                    U32 CharId = 0;
+                    Memory::ReadSafe(pNet + TargetSlot * 0x2E0 + 0x14, &CharId);
+                    if (CharId == 0)
+                    {
+                        for (U32 s = 0; s < 5; ++s)
+                        {
+                            Memory::ReadSafe(pNet + s * 0x2E0 + 0x14, &CharId);
+                            if (CharId != 0)
+                            {
+                                TargetSlot = s;
+                                Logger::Info("[AutoLogin] Auto-detected populated character slot: %u (CharID: %u)", TargetSlot, CharId);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Logger::Info("[AutoLogin] Character confirmed at slot %u (CharID: %u)", TargetSlot, CharId);
+                    }
+                }
+            }
+
+            Logger::Info("[AutoLogin] Selecting and entering world with character slot %u...", TargetSlot);
+            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering world (slot %u)...", TargetSlot);
+
+            if (pCharSelect)
+            {
+                // Call SelectSlot to spawn 3D character model at pCharSelect + 0x30
+                if (Offsets.SelectSlotAddr)
+                {
+                    using SelectSlotFn = void(__fastcall*)(U64 pThis, U32 slotIndex);
+                    auto Fn = reinterpret_cast<SelectSlotFn>(Offsets.SelectSlotAddr);
+                    Fn(pCharSelect, TargetSlot);
+                }
+
+                // Set selected slot field
+                *reinterpret_cast<U32*>(pCharSelect + 0x40) = TargetSlot;
+
+                // Set slot button check state
+                *reinterpret_cast<U8*>(pCharSelect + 0x51)   = (TargetSlot == 0) ? 1 : 0;
+                *reinterpret_cast<U8*>(pCharSelect + 0xA91)  = (TargetSlot == 1) ? 1 : 0;
+                *reinterpret_cast<U8*>(pCharSelect + 0x14D1) = (TargetSlot == 2) ? 1 : 0;
+                *reinterpret_cast<U8*>(pCharSelect + 0x1F11) = (TargetSlot == 3) ? 1 : 0;
+                *reinterpret_cast<U8*>(pCharSelect + 0x2951) = (TargetSlot == 4) ? 1 : 0;
+
+                Sleep(200);
+
+                // Set StartGame flag (0xB338 = 1) - triggers native enter world packet flow!
+                *reinterpret_cast<U8*>(pCharSelect + 0xB338) = 1;
+                Logger::Info("[AutoLogin] Triggered world entry for slot %u (0xB338 = 1)!", TargetSlot);
+            }
+        }
+
+        // STEP 4: Wait for In-Game
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Entering world...");
+        int InGameWait = 200; // 20 seconds
+        while (Running && InGameWait-- > 0)
+        {
+            CurrentState = GetCurrentGameState();
+            const PlayerData& Player = EntityManager::GetLocalPlayer();
+            if (CurrentState == GameState::InGame || Player.Valid)
+            {
+                Logger::Info("[AutoLogin] Reached In-Game world successfully! Auto-login complete.");
+                StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Completed (In Game)");
+                Running = false;
+                return 0;
+            }
+            Sleep(100);
+        }
+
+        if (CurrentState != GameState::InGame)
+        {
+            Logger::Info("[AutoLogin] Finished with GameState: %d (%s)", static_cast<U8>(CurrentState), GetGameStateName(CurrentState));
+            StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Done (%s)", GetGameStateName(CurrentState));
         }
 
         Running = false;
