@@ -14,7 +14,7 @@ namespace ShaiyaOverlay
     char NavigationManager::DestinationName[64] = { 0 };
     U32 NavigationManager::LastPacketTick = 0;
 
-    Vector3 NavigationManager::Waypoints[32] = { 0 };
+    Vector3 NavigationManager::Waypoints[64] = { 0 };
     U32 NavigationManager::WaypointCount = 0;
     U32 NavigationManager::CurrentWaypointIndex = 0;
 
@@ -84,8 +84,7 @@ namespace ShaiyaOverlay
         Vector3 LeftEnd = { End.X + PerpX, End.Y, End.Z + PerpZ };
         LeftEnd.Y = GetGroundHeight(LeftEnd.X, LeftEnd.Z);
 
-        if (fabsf(LeftStart.Y - Start.Y) > 1.5f || fabsf(LeftEnd.Y - End.Y) > 1.5f || !CheckLineOfSight(LeftStart, LeftEnd))
-            return false;
+        bool LeftOk = (fabsf(LeftStart.Y - Start.Y) <= 1.5f && fabsf(LeftEnd.Y - End.Y) <= 1.5f && CheckLineOfSight(LeftStart, LeftEnd));
 
         // 3. Right shoulder ray (check sideways clearance relative to center track)
         Vector3 RightStart = { Start.X - PerpX, Start.Y, Start.Z - PerpZ };
@@ -93,7 +92,10 @@ namespace ShaiyaOverlay
         Vector3 RightEnd = { End.X - PerpX, End.Y, End.Z - PerpZ };
         RightEnd.Y = GetGroundHeight(RightEnd.X, RightEnd.Z);
 
-        if (fabsf(RightStart.Y - Start.Y) > 1.5f || fabsf(RightEnd.Y - End.Y) > 1.5f || !CheckLineOfSight(RightStart, RightEnd))
+        bool RightOk = (fabsf(RightStart.Y - Start.Y) <= 1.5f && fabsf(RightEnd.Y - End.Y) <= 1.5f && CheckLineOfSight(RightStart, RightEnd));
+
+        // Center must be clear; at least one side must be clear (allows passing through gates and walking along walls)
+        if (!LeftOk && !RightOk)
             return false;
 
         return true;
@@ -107,21 +109,21 @@ namespace ShaiyaOverlay
         if (Dist < 0.1f)
             return true;
 
-        // Overall slope check: reject slopes steeper than 0.70 (~35 degrees uphill) or 0.85 (cliff drop)
+        // Overall slope check: reject slopes steeper than 0.28 (~15.6 degrees uphill) or 0.40 (downhill)
         F32 deltaY = End.Y - Start.Y;
-        if (deltaY > 0.0f && (deltaY / Dist) > 0.70f)
+        if (deltaY > 0.0f && (deltaY / Dist) > 0.28f)
             return false;
-        if (deltaY < 0.0f && (-deltaY / Dist) > 0.85f)
-            return false;
-
-        // Width clearance corridor check (0.65m radius = 1.3m clear corridor)
-        if (!CheckWalkableClearance(Start, End, 0.65f))
+        if (deltaY < 0.0f && (-deltaY / Dist) > 0.40f)
             return false;
 
-        // Sample intermediate terrain elevation every 3.0 meters along the line
-        int numSamples = static_cast<int>(Dist / 3.0f);
-        if (numSamples < 2 && Dist > 3.0f) numSamples = 2;
-        if (numSamples > 8) numSamples = 8;
+        // Width clearance corridor check (0.35m radius = 0.70m corridor)
+        if (!CheckWalkableClearance(Start, End, 0.35f))
+            return false;
+
+        // Sample intermediate terrain elevation every 2.0 meters along the line
+        int numSamples = static_cast<int>(Dist / 2.0f);
+        if (numSamples < 2 && Dist > 2.0f) numSamples = 2;
+        if (numSamples > 48) numSamples = 48;
 
         F32 prevY = Start.Y;
         F32 sampleStep = Dist / static_cast<F32>(numSamples + 1);
@@ -132,20 +134,22 @@ namespace ShaiyaOverlay
             F32 sx = Start.X + Dx * t;
             F32 sz = Start.Z + Dz * t;
             F32 actualY = GetGroundHeight(sx, sz);
+            if (actualY == 0.0f)
+                return false;
 
-            // Slope between consecutive samples (prevents crossing vertical cliffs >40 deg)
+            // Slope between consecutive samples (prevents crossing steep steps > 15.6 deg uphill, > 22 deg downhill)
             F32 stepSlope = (actualY - prevY) / sampleStep;
-            if (stepSlope > 0.75f || stepSlope < -0.85f)
+            if (stepSlope > 0.28f || stepSlope < -0.40f)
                 return false;
 
             F32 expectedY = Start.Y + (End.Y - Start.Y) * t;
 
-            // Reject terrain crests that bulge >1.5m above line
-            if ((actualY - expectedY) > 1.5f)
+            // Reject terrain crests that bulge >0.8m above line
+            if ((actualY - expectedY) > 0.8f)
                 return false;
 
-            // Reject ditches/drops that sink >2.5m below line
-            if ((expectedY - actualY) > 2.5f)
+            // Reject ditches/drops that sink >1.5m below line
+            if ((expectedY - actualY) > 1.5f)
                 return false;
 
             prevY = actualY;
@@ -170,6 +174,51 @@ namespace ShaiyaOverlay
     };
 
     U32 NavigationManager::BuildPath(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints)
+    {
+        if (!OutWaypoints || MaxWaypoints == 0)
+            return 0;
+
+        const bool GoalInTown = (Goal.X < 425.0f && Goal.X > 220.0f && Goal.Z > 120.0f && Goal.Z < 260.0f && Goal.Y > 105.0f);
+        const bool StartInTown = (Start.X < 408.0f && Start.X > 220.0f && Start.Z > 120.0f && Start.Z < 260.0f && Start.Y > 105.0f);
+
+        const Vector3 GateOuter = { 424.0f, 107.14f, 141.0f };
+        const Vector3 GateInner = { 405.0f, 107.30f, 141.0f };
+
+        // 1. Entering town from wilderness
+        if (GoalInTown && !StartInTown)
+        {
+            U32 wp1 = 0;
+            if (Start.X > 425.0f || Start.Y < 100.0f)
+            {
+                wp1 = BuildPathAStar(Start, GateOuter, OutWaypoints, MaxWaypoints > 48 ? 48 : MaxWaypoints - 8);
+            }
+
+            if (wp1 < MaxWaypoints - 6)
+            {
+                OutWaypoints[wp1++] = GateInner;
+                U32 remSlots = MaxWaypoints - wp1;
+                U32 wp2 = BuildPathAStar(GateInner, Goal, OutWaypoints + wp1, remSlots);
+                return wp1 + wp2;
+            }
+        }
+
+        // 2. Exiting town to wilderness
+        if (!GoalInTown && StartInTown)
+        {
+            U32 wp1 = BuildPathAStar(Start, GateInner, OutWaypoints, MaxWaypoints > 16 ? 16 : MaxWaypoints - 8);
+            if (wp1 < MaxWaypoints - 6)
+            {
+                OutWaypoints[wp1++] = GateOuter;
+                U32 remSlots = MaxWaypoints - wp1;
+                U32 wp2 = BuildPathAStar(GateOuter, Goal, OutWaypoints + wp1, remSlots);
+                return wp1 + wp2;
+            }
+        }
+
+        return BuildPathAStar(Start, Goal, OutWaypoints, MaxWaypoints);
+    }
+
+    U32 NavigationManager::BuildPathAStar(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints)
     {
         if (!OutWaypoints || MaxWaypoints == 0)
             return 0;
@@ -200,8 +249,8 @@ namespace ShaiyaOverlay
             return 1;
         }
 
-        // Grid setup: 56x56 grid covers full distance with adaptive cell size
-        const int GridDim = 56;
+        // Grid setup: 112x112 grid covers full distance with high resolution
+        const int GridDim = 112;
         F32 DesiredSpan = TotalDist + 50.0f;
         F32 CellSize = DesiredSpan / static_cast<F32>(GridDim - 4);
         if (CellSize < 2.5f) CellSize = 2.5f;
@@ -230,14 +279,14 @@ namespace ShaiyaOverlay
         int goalGX = WorldToGridX(AdjustedGoal.X);
         int goalGZ = WorldToGridZ(AdjustedGoal.Z);
 
-        static AStarCell Grid[56][56];
+        static AStarCell Grid[112][112];
         memset(Grid, 0, sizeof(Grid));
 
-        static HeapNode OpenHeap[2048];
+        static HeapNode OpenHeap[8192];
         int HeapSize = 0;
 
         auto PushHeap = [&](I16 x, I16 z, F32 f) {
-            if (HeapSize >= 2040) return;
+            if (HeapSize >= 8180) return;
             int i = HeapSize++;
             while (i > 0)
             {
@@ -305,9 +354,9 @@ namespace ShaiyaOverlay
         };
 
         int iterations = 0;
-        const int maxIterations = 1500;
+        const int maxIterations = 14000;
 
-        while (HeapSize > 0 && iterations++ < maxIterations)
+        while (HeapSize > 0 && iterations < maxIterations)
         {
             HeapNode cur = PopHeap();
             int cx = cur.x;
@@ -315,6 +364,7 @@ namespace ShaiyaOverlay
 
             if (Grid[cx][cz].state == 2) continue;
             Grid[cx][cz].state = 2;
+            ++iterations;
 
             F32 h = Heuristic(cx, cz, goalGX, goalGZ);
             if (h < bestH)
@@ -324,18 +374,18 @@ namespace ShaiyaOverlay
                 bestZ = cz;
             }
 
-            if (IsGoalNode(cx, cz))
+            F32 curWX = GridToWorldX(cx);
+            F32 curWZ = GridToWorldZ(cz);
+            F32 curWY = GetGroundHeight(curWX, curWZ);
+            Vector3 curPos = { curWX, curWY, curWZ };
+
+            if (IsGoalNode(cx, cz) || (h < 60.0f && IsSegmentWalkable(curPos, AdjustedGoal)))
             {
                 bestX = cx;
                 bestZ = cz;
                 found = true;
                 break;
             }
-
-            F32 curWX = GridToWorldX(cx);
-            F32 curWZ = GridToWorldZ(cz);
-            F32 curWY = GetGroundHeight(curWX, curWZ);
-            Vector3 curPos = { curWX, curWY, curWZ };
 
             for (int i = 0; i < 8; ++i)
             {
@@ -348,38 +398,41 @@ namespace ShaiyaOverlay
                 F32 nWX = GridToWorldX(nx);
                 F32 nWZ = GridToWorldZ(nz);
                 F32 nWY = GetGroundHeight(nWX, nWZ);
-
-                // HARD LIMIT: strictly block slopes where player slides or cliffs (uphill > 0.70, downhill > 0.85)
-                F32 stepDist = costs[i];
-                F32 deltaY = nWY - curWY;
-
-                if (deltaY > 0.0f)
-                {
-                    if ((deltaY / stepDist) > 0.70f)
-                    {
-                        Grid[nx][nz].state = 3;
-                        continue;
-                    }
-                }
-                else
-                {
-                    if ((-deltaY / stepDist) > 0.85f)
-                    {
-                        Grid[nx][nz].state = 3;
-                        continue;
-                    }
-                }
-
-                // Width clearance corridor check (0.65m radius)
-                Vector3 nPos = { nWX, nWY, nWZ };
-                if (!CheckWalkableClearance(curPos, nPos, 0.65f))
+                if (nWY == 0.0f)
                 {
                     Grid[nx][nz].state = 3;
                     continue;
                 }
 
-                // ELEVATION PENALTY: prefer flat ground (roads and valleys) over steep incline
-                F32 slopePenalty = fabsf(deltaY) * 2.5f;
+                // HARD LIMIT: strictly block slopes where player slides or cliffs (uphill > 0.28, downhill > 0.40)
+                F32 stepDist = costs[i];
+                F32 deltaY = nWY - curWY;
+
+                if (deltaY > 0.0f)
+                {
+                    if ((deltaY / stepDist) > 0.28f)
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    if ((-deltaY / stepDist) > 0.40f)
+                    {
+                        continue;
+                    }
+                }
+
+                // Width clearance corridor check (0.35m radius)
+                Vector3 nPos = { nWX, nWY, nWZ };
+                if (!CheckWalkableClearance(curPos, nPos, 0.35f))
+                {
+                    continue;
+                }
+
+                // ELEVATION PENALTY: quadratic uphill penalty heavily penalizes climbing hills
+                F32 slopeGrad = deltaY / stepDist;
+                F32 slopePenalty = (slopeGrad > 0.0f) ? (slopeGrad * slopeGrad * 120.0f * stepDist) : (fabsf(slopeGrad) * 5.0f * stepDist);
                 F32 stepCost = stepDist + slopePenalty;
 
                 F32 newG = Grid[cx][cz].gCost + stepCost;
@@ -399,15 +452,20 @@ namespace ShaiyaOverlay
         int tx = bestX;
         int tz = bestZ;
 
-        Vector3 RawPath[64];
+        Vector3 RawPath[256];
         int RawCount = 0;
 
-        if (found || IsGoalNode(bestX, bestZ))
+        F32 bestWX = GridToWorldX(bestX);
+        F32 bestWZ = GridToWorldZ(bestZ);
+        F32 bestWY = GetGroundHeight(bestWX, bestWZ);
+        Vector3 bestPos = { bestWX, bestWY, bestWZ };
+
+        if (found || IsGoalNode(bestX, bestZ) || IsSegmentWalkable(bestPos, AdjustedGoal))
         {
             RawPath[RawCount++] = AdjustedGoal;
         }
 
-        while (tx != -1 && tz != -1 && RawCount < 60)
+        while (tx != -1 && tz != -1 && RawCount < 250)
         {
             F32 wx = GridToWorldX(tx);
             F32 wz = GridToWorldZ(tz);
@@ -435,7 +493,7 @@ namespace ShaiyaOverlay
         }
 
         // Path smoothing (string pulling) with clearance and slope validation
-        Vector3 Smoothed[32];
+        Vector3 Smoothed[64];
         U32 SmoothCount = 0;
 
         Smoothed[SmoothCount++] = AdjustedStart;
@@ -444,7 +502,10 @@ namespace ShaiyaOverlay
         while (curIdx < RawCount - 1 && SmoothCount < MaxWaypoints - 1)
         {
             int farthest = curIdx + 1;
-            for (int test = RawCount - 1; test > curIdx + 1; --test)
+            int maxLookahead = curIdx + 14;
+            if (maxLookahead >= RawCount) maxLookahead = RawCount - 1;
+
+            for (int test = maxLookahead; test > curIdx + 1; --test)
             {
                 if (IsSegmentWalkable(Smoothed[SmoothCount - 1], RawPath[test]))
                 {
@@ -456,15 +517,18 @@ namespace ShaiyaOverlay
             curIdx = farthest;
         }
 
-        // Ensure AdjustedGoal is connected if reachable or goal was reached
-        if (found || IsGoalNode(bestX, bestZ) || CheckLineOfSight(Smoothed[SmoothCount - 1], AdjustedGoal))
+        // Ensure AdjustedGoal is ALWAYS connected as the destination if goal reached
+        if (found || IsGoalNode(bestX, bestZ) || IsSegmentWalkable(bestPos, AdjustedGoal) || CheckLineOfSight(Smoothed[SmoothCount - 1], AdjustedGoal))
         {
+            if (SmoothCount >= MaxWaypoints)
+                SmoothCount = MaxWaypoints - 1;
+
             F32 FinalDistToGoal = Smoothed[SmoothCount - 1].DistanceTo(AdjustedGoal);
             if (FinalDistToGoal <= 2.5f || CheckLineOfSight(Smoothed[SmoothCount - 1], AdjustedGoal))
             {
                 Smoothed[SmoothCount - 1] = AdjustedGoal;
             }
-            else if (SmoothCount < MaxWaypoints)
+            else
             {
                 Smoothed[SmoothCount++] = AdjustedGoal;
             }
@@ -518,7 +582,7 @@ namespace ShaiyaOverlay
             Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosZ, &StartPos.Z);
         }
 
-        WaypointCount = BuildPath(StartPos, TargetPos, Waypoints, 32);
+        WaypointCount = BuildPath(StartPos, TargetPos, Waypoints, 64);
         CurrentWaypointIndex = 0;
         LastStuckCheckPos = StartPos;
         LastStuckCheckTick = GetTickCount();
@@ -634,6 +698,14 @@ namespace ShaiyaOverlay
 
             if (MovedDist < 0.20f)
             {
+                bool isFinalWp = (WaypointCount > 0 && CurrentWaypointIndex >= WaypointCount - 1);
+                if (isFinalWp)
+                {
+                    Logger::Info("Navigation: Stopped at final waypoint area (moved %.2fm).", MovedDist);
+                    Stop();
+                    return;
+                }
+
                 Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s). Re-routing...", MovedDist);
 
                 // Release key briefly to stop momentum/sliding
@@ -648,7 +720,7 @@ namespace ShaiyaOverlay
                     KeyIsDown = false;
                 }
 
-                WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 32);
+                WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 64);
                 CurrentWaypointIndex = 0;
             }
 
@@ -656,16 +728,11 @@ namespace ShaiyaOverlay
             LastStuckCheckTick = Now;
         }
 
-        // Ensure valid waypoint target
+        // Ensure valid waypoint target: stop when last waypoint reached (no re-pathfind)
         if (WaypointCount == 0 || CurrentWaypointIndex >= WaypointCount)
         {
-            WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 32);
-            CurrentWaypointIndex = 0;
-            if (WaypointCount == 0)
-            {
-                Stop();
-                return;
-            }
+            Stop();
+            return;
         }
 
         Vector3 CurrentTarget = Waypoints[CurrentWaypointIndex];
@@ -675,7 +742,16 @@ namespace ShaiyaOverlay
         F32 Dz = CurrentTarget.Z - CurPos.Z;
         F32 DistToWaypoint = Vector3::Sqrt(Dx * Dx + Dz * Dz);
 
-        if (!isFinalWaypoint)
+        if (isFinalWaypoint)
+        {
+            if (DistToWaypoint <= ArrivalRadius)
+            {
+                Logger::Info("Navigation: Final waypoint reached. Stopping.");
+                Stop();
+                return;
+            }
+        }
+        else
         {
             // Advance to next waypoint if within 2.2m or if player has passed the waypoint plane
             Vector3 PrevPt = (CurrentWaypointIndex == 0) ? CurPos : Waypoints[CurrentWaypointIndex - 1];
@@ -686,6 +762,11 @@ namespace ShaiyaOverlay
             if (DistToWaypoint <= 2.2f || (DistToWaypoint <= 4.0f && DotPast > 0.0f))
             {
                 CurrentWaypointIndex++;
+                if (CurrentWaypointIndex >= WaypointCount)
+                {
+                    Stop();
+                    return;
+                }
                 CurrentTarget = Waypoints[CurrentWaypointIndex];
                 Dx = CurrentTarget.X - CurPos.X;
                 Dz = CurrentTarget.Z - CurPos.Z;

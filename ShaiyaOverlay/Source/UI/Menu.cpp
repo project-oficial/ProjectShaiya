@@ -686,31 +686,62 @@ namespace ShaiyaOverlay
                             }
                             else
                             {
-                                ImGui::TextDisabled("No Mob");
+                                Vector3 CachedPos;
+                                char CachedName[64] = { 0 };
+                                if (QuestManager::GetSavedMobPosition(Q.QuestId, TargetMobId, CachedPos, CachedName, sizeof(CachedName)))
+                                {
+                                    char BtnLabel[32];
+                                    StringUtils::Format(BtnLabel, sizeof(BtnLabel), "To Mob*##Q%u", Q.QuestId);
+                                    if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
+                                    {
+                                        NavigationManager::WalkTo(CachedPos, CachedName[0] ? CachedName : "Quest Mob Area", 5.0f);
+                                    }
+                                    if (ImGui::IsItemHovered())
+                                    {
+                                        ImGui::SetTooltip("Saved spawn area: %s (%.0f, %.0f)",
+                                            CachedName[0] ? CachedName : "Mob Area", CachedPos.X, CachedPos.Z);
+                                    }
+                                }
+                                else
+                                {
+                                    ImGui::TextDisabled("No Mob");
+                                    if (ImGui::IsItemHovered())
+                                    {
+                                        ImGui::SetTooltip("Waiting for mob to appear nearby to auto-record position");
+                                    }
+                                }
                             }
                         }
                         else
                         {
-                            const FixedList<QuestMarker, 32>& Markers = QuestManager::GetQuestMarkers();
                             bool FoundTurnIn = false;
                             Vector3 TurnInPos;
                             char NpcName[64] = "Quest NPC";
-                            for (U32 K = 0; K < Markers.GetCount(); ++K)
-                            {
-                                if (Markers[K].IsTurnIn)
-                                {
-                                    TurnInPos = Markers[K].Position;
-                                    StringUtils::Copy(NpcName, Markers[K].NpcName, sizeof(NpcName));
-                                    FoundTurnIn = true;
-                                    break;
-                                }
-                            }
 
-                            if (!FoundTurnIn && Q.HasDestination)
+                            // Priority 1: Direct destination from RadarArray for this specific quest
+                            if (Q.HasDestination)
                             {
                                 TurnInPos = Q.DestinationPos;
                                 StringUtils::Copy(NpcName, Q.DestinationName, sizeof(NpcName));
                                 FoundTurnIn = true;
+                            }
+
+                            // Priority 2: Match from active QuestMarkers
+                            const FixedList<QuestMarker, 32>& Markers = QuestManager::GetQuestMarkers();
+                            for (U32 K = 0; K < Markers.GetCount(); ++K)
+                            {
+                                const QuestMarker& M = Markers[K];
+                                if (M.IsTurnIn)
+                                {
+                                    // Match either by QuestId or proximity to resolved DestinationPos
+                                    if (M.QuestId == Q.QuestId || (FoundTurnIn && M.Position.DistanceTo(TurnInPos) < 5.0f))
+                                    {
+                                        TurnInPos = M.Position;
+                                        StringUtils::Copy(NpcName, M.NpcName, sizeof(NpcName));
+                                        FoundTurnIn = true;
+                                        break;
+                                    }
+                                }
                             }
 
                             if (FoundTurnIn)
@@ -1223,6 +1254,75 @@ namespace ShaiyaOverlay
                             StringUtils::Format(Label, sizeof(Label), "[QUEST MOB (DROP)] %s (%s %u/%u)",
                                 Mob.Name, Obj.ItemName, Obj.CurrentCount, Obj.CountNeeded);
                             DrawList->AddText(ImVec2(TargetPos.x + 8.0f, TargetPos.y - 8.0f), Color, Label);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 1b. Draw waypoints for saved quest mob areas when live mobs are out of render range
+        for (U32 Q = 0; Q < QuestManager::GetQuestCount(); ++Q)
+        {
+            const ActiveQuest& Quest = QuestManager::GetActiveQuests()[Q];
+            U16 TargetMid = 0;
+            const char* MobLabel = "Quest Mob";
+            for (U32 O = 0; O < Quest.ObjectiveCount; ++O)
+            {
+                if (!Quest.Objectives[O].Completed && Quest.Objectives[O].TargetMobId > 0)
+                {
+                    TargetMid = Quest.Objectives[O].TargetMobId;
+                    MobLabel = Quest.Objectives[O].TargetMobName;
+                    break;
+                }
+            }
+            if (TargetMid == 0)
+            {
+                for (U32 I = 0; I < Quest.ItemObjectiveCount; ++I)
+                {
+                    if (!Quest.ItemObjectives[I].Completed && Quest.ItemObjectives[I].DroppedByMobId > 0)
+                    {
+                        TargetMid = Quest.ItemObjectives[I].DroppedByMobId;
+                        MobLabel = Quest.ItemObjectives[I].DroppedByMobName;
+                        break;
+                    }
+                }
+            }
+
+            if (TargetMid > 0)
+            {
+                bool HasLiveMob = false;
+                for (U32 M = 0; M < MobCount; ++M)
+                {
+                    if (Mobs[M].Alive && Mobs[M].MobId == TargetMid)
+                    {
+                        HasLiveMob = true;
+                        break;
+                    }
+                }
+
+                if (!HasLiveMob)
+                {
+                    Vector3 SavedPos;
+                    char SavedName[64] = { 0 };
+                    if (QuestManager::GetSavedMobPosition(Quest.QuestId, TargetMid, SavedPos, SavedName, sizeof(SavedName)))
+                    {
+                        Vector2 ScreenPos;
+                        if (Camera::WorldToScreen(SavedPos, ScreenPos, ScreenW, ScreenH))
+                        {
+                            ImVec2 TargetPos(ScreenPos.X, ScreenPos.Y);
+                            ImU32 Color = IM_COL32(255, 140, 0, 230); // Orange for saved mob spawn area
+
+                            DrawList->AddLine(ScreenOrigin, TargetPos, Color, 1.8f);
+                            DrawList->AddCircle(TargetPos, 12.0f, Color, 16, 2.0f);
+                            DrawList->AddCircle(TargetPos, 6.0f, Color, 12, 1.5f);
+                            DrawList->AddCircleFilled(TargetPos, 3.0f, Color);
+
+                            const PlayerData& LocalPlayer = EntityManager::GetLocalPlayer();
+                            char Label[128];
+                            F32 Dist = LocalPlayer.Valid ? SavedPos.DistanceTo(LocalPlayer.Position) : 0.0f;
+                            StringUtils::Format(Label, sizeof(Label), "[MOB SPAWN] %s (%.0fm)",
+                                SavedName[0] ? SavedName : MobLabel, Dist);
+                            DrawList->AddText(ImVec2(TargetPos.x + 14.0f, TargetPos.y - 7.0f), Color, Label);
                         }
                     }
                 }

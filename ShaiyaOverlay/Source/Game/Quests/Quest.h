@@ -29,7 +29,8 @@ namespace ShaiyaOverlay
     {
         U16 QuestId;
         U8 Step;
-        U32 EndNpcId;
+        U8 EndNpcType;
+        U16 EndNpcId;
         Vector3 DestinationPos;
         bool HasDestination;
         F32 Distance;

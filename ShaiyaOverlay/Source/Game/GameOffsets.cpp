@@ -206,13 +206,21 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  QuestTextTable  : FAILED (AOB not found)");
 
-        // 14. QuestMarkerList
+        // 14. QuestMarkerList & Radar Array
         U64 MatchMarkers = PatternScanner::ScanModule(nullptr, "4C 8D 25 ? ? ? ? 66 41 0F 6E F5 0F 5B F6");
         Offsets.QuestMarkerList = MatchMarkers ? PatternScanner::RipRelative(MatchMarkers, 3, 7) : 0;
         if (Offsets.QuestMarkerList)
+        {
+            Offsets.RadarCountAddr = Offsets.QuestMarkerList - 0xF0;
+            Offsets.RadarArrayAddr = Offsets.QuestMarkerList - 0xE8;
             Logger::Info("  QuestMarkerList : 0x%llX", Offsets.QuestMarkerList);
+            Logger::Info("  RadarCountAddr  : 0x%llX", Offsets.RadarCountAddr);
+            Logger::Info("  RadarArrayAddr  : 0x%llX", Offsets.RadarArrayAddr);
+        }
         else
+        {
             Logger::Error("  QuestMarkerList : FAILED (AOB not found)");
+        }
 
         // 15. SetAction (sub_14005F520)
         U64 MatchSetAction = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 57 48 83 EC 20 83 B9 AC 04 00 00 00");

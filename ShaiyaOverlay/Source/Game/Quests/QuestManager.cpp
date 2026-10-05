@@ -5,11 +5,208 @@
 #include "Game/Entities/EntityManager.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 namespace ShaiyaOverlay
 {
     FixedList<ActiveQuest, 16> QuestManager::Quests;
     FixedList<QuestMarker, 32> QuestManager::Markers;
+    FixedList<SavedQuestMob, 128> QuestManager::SavedMobCache;
+    bool QuestManager::MobCacheLoaded = false;
+
+    static void GetQuestMobsIniPath(char* OutPath, U32 MaxLen)
+    {
+        GetModuleFileNameA(NULL, OutPath, MaxLen);
+        char* pLastSlash = strrchr(OutPath, '\\');
+        if (pLastSlash)
+            *(pLastSlash + 1) = '\0';
+        strcat_s(OutPath, MaxLen, "quest_mobs.ini");
+    }
+
+    void QuestManager::LoadMobCache()
+    {
+        SavedMobCache.Clear();
+        MobCacheLoaded = true;
+
+        char IniPath[MAX_PATH] = { 0 };
+        GetQuestMobsIniPath(IniPath, sizeof(IniPath));
+
+        if (GetFileAttributesA(IniPath) == INVALID_FILE_ATTRIBUTES)
+            return;
+
+        char SectionNames[8192] = { 0 };
+        DWORD BytesRead = GetPrivateProfileSectionNamesA(SectionNames, sizeof(SectionNames), IniPath);
+        if (BytesRead == 0)
+            return;
+
+        const char* pSection = SectionNames;
+        while (*pSection && SavedMobCache.GetCount() < 128)
+        {
+            U32 Qid = GetPrivateProfileIntA(pSection, "QuestId", 0, IniPath);
+            U32 Mid = GetPrivateProfileIntA(pSection, "MobId", 0, IniPath);
+
+            char BufX[32] = { 0 };
+            char BufY[32] = { 0 };
+            char BufZ[32] = { 0 };
+            char BufName[64] = { 0 };
+
+            GetPrivateProfileStringA(pSection, "X", "0", BufX, sizeof(BufX), IniPath);
+            GetPrivateProfileStringA(pSection, "Y", "0", BufY, sizeof(BufY), IniPath);
+            GetPrivateProfileStringA(pSection, "Z", "0", BufZ, sizeof(BufZ), IniPath);
+            GetPrivateProfileStringA(pSection, "Name", "", BufName, sizeof(BufName), IniPath);
+
+            F32 X = static_cast<F32>(atof(BufX));
+            F32 Y = static_cast<F32>(atof(BufY));
+            F32 Z = static_cast<F32>(atof(BufZ));
+
+            if (Mid > 0 && (X != 0.0f || Z != 0.0f))
+            {
+                SavedQuestMob Entry;
+                Entry.QuestId = static_cast<U16>(Qid);
+                Entry.MobId = static_cast<U16>(Mid);
+                Entry.Position = { X, Y, Z };
+                StringUtils::Copy(Entry.MobName, BufName, sizeof(Entry.MobName));
+                SavedMobCache.Add(Entry);
+            }
+
+            pSection += strlen(pSection) + 1;
+        }
+    }
+
+    void QuestManager::SaveMobPosition(U16 QuestId, U16 MobId, const Vector3& Pos, const char* MobName)
+    {
+        if (MobId == 0)
+            return;
+
+        if (!MobCacheLoaded)
+            LoadMobCache();
+
+        for (U32 i = 0; i < SavedMobCache.GetCount(); ++i)
+        {
+            auto& Entry = SavedMobCache[i];
+            if (Entry.QuestId == QuestId && Entry.MobId == MobId)
+            {
+                if (Entry.Position.DistanceTo(Pos) < 35.0f)
+                    return;
+
+                Entry.Position = Pos;
+                if (MobName && MobName[0] != '\0')
+                    StringUtils::Copy(Entry.MobName, MobName, sizeof(Entry.MobName));
+                goto WriteDisk;
+            }
+        }
+
+        if (SavedMobCache.GetCount() < 128)
+        {
+            SavedQuestMob Entry;
+            Entry.QuestId = QuestId;
+            Entry.MobId = MobId;
+            Entry.Position = Pos;
+            Entry.MobName[0] = '\0';
+            if (MobName && MobName[0] != '\0')
+                StringUtils::Copy(Entry.MobName, MobName, sizeof(Entry.MobName));
+            SavedMobCache.Add(Entry);
+        }
+
+    WriteDisk:
+        char IniPath[MAX_PATH] = { 0 };
+        GetQuestMobsIniPath(IniPath, sizeof(IniPath));
+
+        char Section[64];
+        StringUtils::Format(Section, sizeof(Section), "Quest_%u_Mob_%u", QuestId, MobId);
+
+        char szVal[32];
+        StringUtils::Format(szVal, sizeof(szVal), "%u", QuestId);
+        WritePrivateProfileStringA(Section, "QuestId", szVal, IniPath);
+
+        StringUtils::Format(szVal, sizeof(szVal), "%u", MobId);
+        WritePrivateProfileStringA(Section, "MobId", szVal, IniPath);
+
+        StringUtils::Format(szVal, sizeof(szVal), "%.2f", Pos.X);
+        WritePrivateProfileStringA(Section, "X", szVal, IniPath);
+
+        StringUtils::Format(szVal, sizeof(szVal), "%.2f", Pos.Y);
+        WritePrivateProfileStringA(Section, "Y", szVal, IniPath);
+
+        StringUtils::Format(szVal, sizeof(szVal), "%.2f", Pos.Z);
+        WritePrivateProfileStringA(Section, "Z", szVal, IniPath);
+
+        if (MobName && MobName[0] != '\0')
+        {
+            WritePrivateProfileStringA(Section, "Name", MobName, IniPath);
+        }
+    }
+
+    bool QuestManager::GetSavedMobPosition(U16 QuestId, U16 MobId, Vector3& OutPos, char* OutName, U32 MaxLen)
+    {
+        if (QuestId == 0 || MobId == 0)
+            return false;
+
+        if (!MobCacheLoaded)
+            LoadMobCache();
+
+        for (U32 i = 0; i < SavedMobCache.GetCount(); ++i)
+        {
+            const auto& Entry = SavedMobCache[i];
+            if (Entry.QuestId == QuestId && Entry.MobId == MobId)
+            {
+                OutPos = Entry.Position;
+                if (OutName && MaxLen > 0)
+                    StringUtils::Copy(OutName, Entry.MobName, MaxLen);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void QuestManager::AutoRecordNearbyQuestMobs()
+    {
+        if (Quests.GetCount() == 0)
+            return;
+
+        const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
+        if (Mobs.GetCount() == 0)
+            return;
+
+        for (U32 Q = 0; Q < Quests.GetCount(); ++Q)
+        {
+            const ActiveQuest& Quest = Quests[Q];
+
+            for (U32 O = 0; O < Quest.ObjectiveCount; ++O)
+            {
+                U16 TargetMid = Quest.Objectives[O].TargetMobId;
+                if (TargetMid == 0) continue;
+
+                for (U32 M = 0; M < Mobs.GetCount(); ++M)
+                {
+                    const MonsterEntity& Mob = Mobs[M];
+                    if (Mob.Alive && Mob.MobId == TargetMid)
+                    {
+                        SaveMobPosition(Quest.QuestId, TargetMid, Mob.Position, Mob.Name);
+                        break;
+                    }
+                }
+            }
+
+            for (U32 I = 0; I < Quest.ItemObjectiveCount; ++I)
+            {
+                U16 DropMid = Quest.ItemObjectives[I].DroppedByMobId;
+                if (DropMid == 0) continue;
+
+                for (U32 M = 0; M < Mobs.GetCount(); ++M)
+                {
+                    const MonsterEntity& Mob = Mobs[M];
+                    if (Mob.Alive && Mob.MobId == DropMid)
+                    {
+                        SaveMobPosition(Quest.QuestId, DropMid, Mob.Position, Mob.Name);
+                        break;
+                    }
+                }
+            }
+        }
+    }
 
     U32 QuestManager::CountInventoryItem(U8 ItemType, U8 ItemTypeId)
     {
@@ -92,6 +289,45 @@ namespace ShaiyaOverlay
         return TagCount;
     }
 
+    bool QuestManager::FindRadarNpcPosition(U8 NpcType, U16 NpcId, Vector3& OutPos)
+    {
+        if (!Offsets.RadarCountAddr || !Offsets.RadarArrayAddr)
+            return false;
+
+        U32 Count = 0;
+        if (!Memory::ReadSafe(Offsets.RadarCountAddr, &Count) || Count == 0)
+            return false;
+
+        U64 ArrayPtr = 0;
+        if (!Memory::ReadSafe(Offsets.RadarArrayAddr, &ArrayPtr) || !ArrayPtr)
+            return false;
+
+        constexpr U32 MaxRadarEntries = 512;
+        U32 Total = (Count > MaxRadarEntries) ? MaxRadarEntries : Count;
+
+        for (U32 I = 0; I < Total; ++I)
+        {
+            U64 EntryPtr = ArrayPtr + I * 48;
+            U8 Type = 0;
+            U16 Id = 0;
+            Memory::ReadSafe(EntryPtr + 24, &Type);
+            Memory::ReadSafe(EntryPtr + 28, &Id);
+
+            if (Type == NpcType && Id == NpcId)
+            {
+                Memory::ReadSafe(EntryPtr, &OutPos.X);
+                Memory::ReadSafe(EntryPtr + 4, &OutPos.Y);
+                Memory::ReadSafe(EntryPtr + 8, &OutPos.Z);
+                F32 GroundY = NavigationManager::GetGroundHeight(OutPos.X, OutPos.Z);
+                if (GroundY != 0.0f)
+                    OutPos.Y = GroundY;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     bool QuestManager::FindNpcPosition(U32 NpcId, Vector3& OutPos)
     {
         if (!Offsets.NpcFile || NpcId == 0)
@@ -131,6 +367,7 @@ namespace ShaiyaOverlay
     {
         UpdateActiveQuests();
         UpdateRadarMarkers();
+        AutoRecordNearbyQuestMobs();
     }
 
     void QuestManager::UpdateActiveQuests()
@@ -171,6 +408,7 @@ namespace ShaiyaOverlay
             ActiveQuest Quest;
             Quest.QuestId = 0;
             Quest.Step = 0;
+            Quest.EndNpcType = 0;
             Quest.EndNpcId = 0;
             Quest.HasDestination = false;
             Quest.Distance = 0.0f;
@@ -320,24 +558,38 @@ namespace ShaiyaOverlay
             if (Quest.Title[0] == '\0')
                 StringUtils::Format(Quest.Title, sizeof(Quest.Title), "Quest #%u", Quest.QuestId);
 
-            // 2. Look up End NPC in CNPCFile
-            if (DbQuestsArray && Quest.QuestId <= TotalDbQuests)
+            // 2. Read End NPC info from QuestTextTable record (+0x5C = Type, +0x5E = Id)
+            if (Offsets.QuestTextTable)
             {
-                U64 QuestRec = DbQuestsArray + (Quest.QuestId - 1) * 656;
-                Memory::ReadSafe(QuestRec + 20, &Quest.EndNpcId);
+                U64 QuestTxtRec = Offsets.QuestTextTable + (Quest.QuestId - 1) * 488;
+                Memory::ReadSafe(QuestTxtRec + 0x5C, &Quest.EndNpcType);
+                Memory::ReadSafe(QuestTxtRec + 0x5E, &Quest.EndNpcId);
             }
 
-            if (Quest.EndNpcId > 0)
+            if (Quest.EndNpcType > 0 || Quest.EndNpcId > 0)
             {
-                Quest.HasDestination = FindNpcPosition(Quest.EndNpcId, Quest.DestinationPos);
-                if (Quest.HasDestination && Player.Valid)
+                Quest.HasDestination = FindRadarNpcPosition(Quest.EndNpcType, Quest.EndNpcId, Quest.DestinationPos);
+                if (Quest.HasDestination)
                 {
-                    Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
-                    StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC #%u", Quest.EndNpcId);
+                    if (Player.Valid)
+                        Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
+                    StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC (%u-%u)", Quest.EndNpcType, Quest.EndNpcId);
                 }
                 else
                 {
-                    StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC #%u (?)", Quest.EndNpcId);
+                    // Fallback to CNPCFile only if radar entry not found on current map
+                    if (FindNpcPosition(Quest.EndNpcId, Quest.DestinationPos))
+                    {
+                        Quest.HasDestination = true;
+                        if (Player.Valid)
+                            Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
+                        StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC #%u", Quest.EndNpcId);
+                    }
+                    else
+                    {
+                        Quest.HasDestination = false;
+                        StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC (%u-%u)", Quest.EndNpcType, Quest.EndNpcId);
+                    }
                 }
             }
             else
@@ -352,8 +604,6 @@ namespace ShaiyaOverlay
 
     void QuestManager::UpdateRadarMarkers()
     {
-        Markers.Clear();
-
         if (!Offsets.QuestMarkerList || !Offsets.WorldManager)
             return;
 
@@ -396,6 +646,7 @@ namespace ShaiyaOverlay
         if (!Memory::ReadSafe(Offsets.QuestMarkerList + 0x10, &Node) || !Node)
             return;
 
+        FixedList<QuestMarker, 32> NewMarkers;
         U32 MarkerWalk = 0;
         while (Node && Node != Offsets.QuestMarkerList && MarkerWalk < 32)
         {
@@ -448,11 +699,16 @@ namespace ShaiyaOverlay
                 else
                     Marker.Distance = 0.0f;
 
-                Markers.Add(Marker);
+                NewMarkers.Add(Marker);
             }
 
             Node = NextNode;
             ++MarkerWalk;
+        }
+
+        if (NewMarkers.GetCount() > 0 || Quests.GetCount() == 0)
+        {
+            Markers = NewMarkers;
         }
     }
 }

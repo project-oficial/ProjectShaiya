@@ -20,6 +20,7 @@ namespace ShaiyaOverlay
 
         // Path generation
         static U32 BuildPath(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints);
+        static U32 BuildPathAStar(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints);
 
         static bool IsNavigating() { return Active; }
         static const Vector3& GetTargetPosition() { return TargetPos; }
@@ -38,7 +39,7 @@ namespace ShaiyaOverlay
         static U32 LastPacketTick;
 
         // Pathfinding Waypoints
-        static Vector3 Waypoints[32];
+        static Vector3 Waypoints[64];
         static U32 WaypointCount;
         static U32 CurrentWaypointIndex;
 

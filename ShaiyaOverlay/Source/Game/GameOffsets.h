@@ -28,6 +28,8 @@ namespace ShaiyaOverlay
         U64 QuestTextTable;
         U64 QuestTextTablePtr;
         U64 QuestMarkerList;
+        U64 RadarCountAddr;
+        U64 RadarArrayAddr;
         U64 PlayerInventory;
         U64 SetActionAddr;
         U64 SendMovePacketAddr;
