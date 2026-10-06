@@ -102,7 +102,20 @@ namespace ShaiyaOverlay
                 ImGui::PopStyleColor(3);
             }
 
-            if (NavigationManager::IsNavigating())
+            if (NavigationManager::IsComputingPath())
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), ">> AUTO-WALK: Calculando rota para %s...",
+                    NavigationManager::GetTargetName());
+                if (WndProcHook::IsMenuOpen())
+                {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("CANCEL"))
+                    {
+                        NavigationManager::Stop();
+                    }
+                }
+            }
+            else if (NavigationManager::IsNavigating())
             {
                 ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), ">> AUTO-WALK: %s (%.1fm)",
                     NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());

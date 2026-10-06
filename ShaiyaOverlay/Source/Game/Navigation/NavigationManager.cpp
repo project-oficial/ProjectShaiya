@@ -23,6 +23,21 @@ namespace ShaiyaOverlay
     U32 NavigationManager::LastStuckCheckTick = 0;
     U32 NavigationManager::DetourLockTick = 0;
 
+    std::atomic<bool> NavigationManager::WorkerInitialized{ false };
+    std::atomic<bool> NavigationManager::ComputingPath{ false };
+    std::atomic<bool> NavigationManager::PathReady{ false };
+    std::atomic<bool> NavigationManager::CancelRequested{ false };
+
+    Vector3 NavigationManager::RequestStart = { 0.0f, 0.0f, 0.0f };
+    Vector3 NavigationManager::RequestGoal = { 0.0f, 0.0f, 0.0f };
+    Vector3 NavigationManager::StagedWaypoints[64] = {};
+    U32 NavigationManager::StagedWaypointCount = 0;
+
+    HANDLE NavigationManager::hWorkerThread = nullptr;
+    HANDLE NavigationManager::hWorkEvent = nullptr;
+    HANDLE NavigationManager::hExitEvent = nullptr;
+    CRITICAL_SECTION NavigationManager::PathLock = {};
+
     static bool KeyIsDown = false;
 
     typedef bool (__fastcall* tCheckLineOfSight)(U64 WorldMgr, const float* StartPos, const float* EndPos);
@@ -39,16 +54,154 @@ namespace ShaiyaOverlay
         return FindWindowA("SDL_app", nullptr);
     }
 
-    bool NavigationManager::CheckLineOfSight(const Vector3& Start, const Vector3& End)
+    void NavigationManager::InitWorker()
+    {
+        if (WorkerInitialized.load())
+            return;
+
+        InitializeCriticalSection(&PathLock);
+        hWorkEvent = CreateEventA(nullptr, FALSE, FALSE, nullptr);
+        hExitEvent = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+
+        hWorkerThread = CreateThread(
+            nullptr,
+            0,
+            PathWorkerProc,
+            nullptr,
+            0,
+            nullptr
+        );
+
+        WorkerInitialized.store(true);
+        Logger::Info("Navigation: Async pathfinder worker thread initialized.");
+    }
+
+    void NavigationManager::Shutdown()
+    {
+        if (!WorkerInitialized.load())
+            return;
+
+        Stop();
+
+        if (hExitEvent)
+            SetEvent(hExitEvent);
+
+        if (hWorkerThread)
+        {
+            WaitForSingleObject(hWorkerThread, 1500);
+            CloseHandle(hWorkerThread);
+            hWorkerThread = nullptr;
+        }
+
+        if (hWorkEvent)
+        {
+            CloseHandle(hWorkEvent);
+            hWorkEvent = nullptr;
+        }
+
+        if (hExitEvent)
+        {
+            CloseHandle(hExitEvent);
+            hExitEvent = nullptr;
+        }
+
+        DeleteCriticalSection(&PathLock);
+        WorkerInitialized.store(false);
+        Logger::Info("Navigation: Async pathfinder worker thread shut down.");
+    }
+
+    DWORD WINAPI NavigationManager::PathWorkerProc(LPVOID lpParam)
+    {
+        HANDLE waitHandles[2] = { hExitEvent, hWorkEvent };
+
+        while (true)
+        {
+            DWORD res = WaitForMultipleObjects(2, waitHandles, FALSE, INFINITE);
+            if (res == WAIT_OBJECT_0) // hExitEvent
+            {
+                break;
+            }
+            else if (res == WAIT_OBJECT_0 + 1) // hWorkEvent
+            {
+                Vector3 start, goal;
+                EnterCriticalSection(&PathLock);
+                start = RequestStart;
+                goal = RequestGoal;
+                LeaveCriticalSection(&PathLock);
+
+                if (CancelRequested.load())
+                {
+                    ComputingPath.store(false);
+                    continue;
+                }
+
+                Vector3 localWps[64];
+                U32 count = BuildPath(start, goal, localWps, 64);
+
+                if (CancelRequested.load())
+                {
+                    ComputingPath.store(false);
+                    continue;
+                }
+
+                EnterCriticalSection(&PathLock);
+                StagedWaypointCount = count;
+                for (U32 i = 0; i < count; ++i)
+                    StagedWaypoints[i] = localWps[i];
+                LeaveCriticalSection(&PathLock);
+
+                PathReady.store(true);
+                ComputingPath.store(false);
+            }
+        }
+
+        return 0;
+    }
+
+    void NavigationManager::RequestAsyncPath(const Vector3& Start, const Vector3& Goal)
+    {
+        InitWorker();
+
+        CancelRequested.store(true); // Signal any active calculation to cancel
+
+        EnterCriticalSection(&PathLock);
+        RequestStart = Start;
+        RequestGoal = Goal;
+        CancelRequested.store(false);
+        PathReady.store(false);
+        ComputingPath.store(true);
+        LeaveCriticalSection(&PathLock);
+
+        SetEvent(hWorkEvent);
+    }
+
+    bool NavigationManager::CheckLineOfSightElevated(const Vector3& Start, const Vector3& End, F32 HeightOffset)
     {
         if (!Offsets.CheckLineOfSightAddr || !Offsets.WorldManager)
             return true;
 
         auto Fn = reinterpret_cast<tCheckLineOfSight>(Offsets.CheckLineOfSightAddr);
-        float StartBuf[3] = { Start.X, Start.Y, Start.Z };
-        float EndBuf[3]   = { End.X,   End.Y,   End.Z };
+        float StartBuf[3] = { Start.X, Start.Y + HeightOffset, Start.Z };
+        float EndBuf[3]   = { End.X,   End.Y + HeightOffset,   End.Z };
 
         return Fn(Offsets.WorldManager, StartBuf, EndBuf);
+    }
+
+    bool NavigationManager::CheckLineOfSight(const Vector3& Start, const Vector3& End)
+    {
+        // 1. Torso/Waist level (+0.95m): main body check
+        if (!CheckLineOfSightElevated(Start, End, 0.95f))
+            return false;
+
+        // 2. Head level (+1.75m): doorframes, archways, low ceilings, awnings, tree branches
+        if (!CheckLineOfSightElevated(Start, End, 1.75f))
+            return false;
+
+        // 3. Knee level (+0.35m): low obstacles, fences, curbs, rubble, gravestones
+        if (!CheckLineOfSightElevated(Start, End, 0.35f))
+            return false;
+
+        return true;
     }
 
     F32 NavigationManager::GetGroundHeight(F32 X, F32 Z)
@@ -62,7 +215,7 @@ namespace ShaiyaOverlay
 
     bool NavigationManager::CheckWalkableClearance(const Vector3& Start, const Vector3& End, F32 Radius)
     {
-        // 1. Center ray
+        // 1. Center capsule ray (all 3 vertical height levels)
         if (!CheckLineOfSight(Start, End))
             return false;
 
@@ -86,7 +239,16 @@ namespace ShaiyaOverlay
         Vector3 LeftEnd = { End.X + PerpX, End.Y, End.Z + PerpZ };
         LeftEnd.Y = GetGroundHeight(LeftEnd.X, LeftEnd.Z);
 
-        bool LeftOk = (fabsf(LeftStart.Y - Start.Y) <= 1.5f && fabsf(LeftEnd.Y - End.Y) <= 1.5f && CheckLineOfSight(LeftStart, LeftEnd));
+        if (LeftStart.Y == 0.0f || LeftEnd.Y == 0.0f)
+            return false; // Ground is missing or inside solid building boundary
+
+        if (fabsf(LeftStart.Y - Start.Y) > 0.85f || fabsf(LeftEnd.Y - End.Y) > 0.85f)
+            return false; // Steep sideways drop or cliff wall at shoulder
+
+        // Left shoulder Torso (+0.95m) and Head (+1.75m)
+        if (!CheckLineOfSightElevated(LeftStart, LeftEnd, 0.95f) ||
+            !CheckLineOfSightElevated(LeftStart, LeftEnd, 1.75f))
+            return false;
 
         // 3. Right shoulder ray (check sideways clearance relative to center track)
         Vector3 RightStart = { Start.X - PerpX, Start.Y, Start.Z - PerpZ };
@@ -94,10 +256,15 @@ namespace ShaiyaOverlay
         Vector3 RightEnd = { End.X - PerpX, End.Y, End.Z - PerpZ };
         RightEnd.Y = GetGroundHeight(RightEnd.X, RightEnd.Z);
 
-        bool RightOk = (fabsf(RightStart.Y - Start.Y) <= 1.5f && fabsf(RightEnd.Y - End.Y) <= 1.5f && CheckLineOfSight(RightStart, RightEnd));
+        if (RightStart.Y == 0.0f || RightEnd.Y == 0.0f)
+            return false; // Ground is missing or inside solid building boundary
 
-        // BOTH shoulders must be clear to ensure character body width fits without scraping walls/corners
-        if (!LeftOk || !RightOk)
+        if (fabsf(RightStart.Y - Start.Y) > 0.85f || fabsf(RightEnd.Y - End.Y) > 0.85f)
+            return false; // Steep sideways drop or cliff wall at shoulder
+
+        // Right shoulder Torso (+0.95m) and Head (+1.75m)
+        if (!CheckLineOfSightElevated(RightStart, RightEnd, 0.95f) ||
+            !CheckLineOfSightElevated(RightStart, RightEnd, 1.75f))
             return false;
 
         return true;
@@ -111,20 +278,20 @@ namespace ShaiyaOverlay
         if (Dist < 0.1f)
             return true;
 
-        // Overall slope check: reject slopes steeper than 0.28 (~15.6 degrees uphill) or 0.40 (downhill)
+        // Overall slope check: reject slopes steeper than 0.70 (~35 degrees uphill) or 0.85 (downhill)
         F32 StartY = GetGroundHeight(Start.X, Start.Z);
         if (StartY == 0.0f) StartY = Start.Y;
         F32 EndY = GetGroundHeight(End.X, End.Z);
         if (EndY == 0.0f) EndY = End.Y;
 
         F32 deltaY = EndY - StartY;
-        if (deltaY > 0.0f && (deltaY / Dist) > 0.28f)
+        if (deltaY > 0.0f && (deltaY / Dist) > 0.70f)
             return false;
-        if (deltaY < 0.0f && (-deltaY / Dist) > 0.40f)
+        if (deltaY < 0.0f && (-deltaY / Dist) > 0.85f)
             return false;
 
-        // Width clearance corridor check (0.45m radius = 0.90m clear corridor)
-        if (!CheckWalkableClearance(Start, End, 0.45f))
+        // Width clearance corridor check (0.70m radius = 1.40m clear corridor with full height clearance)
+        if (!CheckWalkableClearance(Start, End, 0.70f))
             return false;
 
         // Sample intermediate terrain elevation every 2.0 meters along the line
@@ -144,19 +311,19 @@ namespace ShaiyaOverlay
             if (actualY == 0.0f)
                 return false;
 
-            // Slope between consecutive samples (prevents crossing steep steps > 15.6 deg uphill, > 22 deg downhill)
+            // Slope between consecutive samples (prevents crossing steep steps > 35 deg uphill, > 40 deg downhill)
             F32 stepSlope = (actualY - prevY) / sampleStep;
-            if (stepSlope > 0.28f || stepSlope < -0.40f)
+            if (stepSlope > 0.70f || stepSlope < -0.85f)
                 return false;
 
             F32 expectedY = Start.Y + (End.Y - Start.Y) * t;
 
-            // Reject terrain crests that bulge >0.8m above line
-            if ((actualY - expectedY) > 0.8f)
+            // Reject terrain crests that bulge >2.0m above line
+            if ((actualY - expectedY) > 2.0f)
                 return false;
 
-            // Reject ditches/drops that sink >1.5m below line
-            if ((expectedY - actualY) > 1.5f)
+            // Reject ditches/drops that sink >3.0m below line
+            if ((expectedY - actualY) > 3.0f)
                 return false;
 
             prevY = actualY;
@@ -255,9 +422,10 @@ namespace ShaiyaOverlay
             return 1;
         }
 
-        // Grid setup: 112x112 grid covers full distance with high resolution
-        const int GridDim = 112;
-        F32 DesiredSpan = TotalDist + 50.0f;
+        // Grid setup: 128x128 grid covers full distance with adaptive detour margin
+        const int GridDim = 128;
+        F32 DetourMargin = (TotalDist > 60.0f) ? (TotalDist * 1.5f + 250.0f) : (TotalDist + 60.0f);
+        F32 DesiredSpan = DetourMargin;
         F32 CellSize = DesiredSpan / static_cast<F32>(GridDim - 4);
         if (CellSize < 0.75f) CellSize = 0.75f;
 
@@ -285,14 +453,14 @@ namespace ShaiyaOverlay
         int goalGX = WorldToGridX(AdjustedGoal.X);
         int goalGZ = WorldToGridZ(AdjustedGoal.Z);
 
-        static AStarCell Grid[112][112];
+        static AStarCell Grid[128][128];
         memset(Grid, 0, sizeof(Grid));
 
-        static HeapNode OpenHeap[8192];
+        static HeapNode OpenHeap[16384];
         int HeapSize = 0;
 
         auto PushHeap = [&](I16 x, I16 z, F32 f) {
-            if (HeapSize >= 8180) return;
+            if (HeapSize >= 16370) return;
             int i = HeapSize++;
             while (i > 0)
             {
@@ -364,6 +532,9 @@ namespace ShaiyaOverlay
 
         while (HeapSize > 0 && iterations < maxIterations)
         {
+            if (CancelRequested.load())
+                return 0;
+
             HeapNode cur = PopHeap();
             int cx = cur.x;
             int cz = cur.z;
@@ -385,7 +556,7 @@ namespace ShaiyaOverlay
             F32 curWY = (cx == startGX && cz == startGZ) ? AdjustedStart.Y : GetGroundHeight(curWX, curWZ);
             Vector3 curPos = { curWX, curWY, curWZ };
 
-            if ((cx != startGX || cz != startGZ) && (IsGoalNode(cx, cz) || (h < 60.0f && IsSegmentWalkable(curPos, AdjustedGoal))))
+            if ((cx != startGX || cz != startGZ) && (IsGoalNode(cx, cz) || (h < 15.0f && (iterations % 4 == 0) && IsSegmentWalkable(curPos, AdjustedGoal))))
             {
                 bestX = cx;
                 bestZ = cz;
@@ -410,35 +581,35 @@ namespace ShaiyaOverlay
                     continue;
                 }
 
-                // HARD LIMIT: strictly block slopes where player slides or cliffs (uphill > 0.28, downhill > 0.40)
+                // Slopes: uphill <= 0.70, downhill <= 0.85
                 F32 stepDist = costs[i];
                 F32 deltaY = nWY - curWY;
 
                 if (deltaY > 0.0f)
                 {
-                    if ((deltaY / stepDist) > 0.28f)
+                    if ((deltaY / stepDist) > 0.70f)
                     {
                         continue;
                     }
                 }
                 else
                 {
-                    if ((-deltaY / stepDist) > 0.40f)
+                    if ((-deltaY / stepDist) > 0.85f)
                     {
                         continue;
                     }
                 }
 
-                // Width clearance corridor check (0.45m radius)
+                // Corridor clearance check: full character width (0.65m radius = 1.30m corridor) and height (+0.35m, +0.95m, +1.75m)
                 Vector3 nPos = { nWX, nWY, nWZ };
-                if (!CheckWalkableClearance(curPos, nPos, 0.45f))
+                if (!CheckWalkableClearance(curPos, nPos, 0.65f))
                 {
                     continue;
                 }
 
                 // ELEVATION PENALTY: quadratic uphill penalty heavily penalizes climbing hills
                 F32 slopeGrad = deltaY / stepDist;
-                F32 slopePenalty = (slopeGrad > 0.0f) ? (slopeGrad * slopeGrad * 120.0f * stepDist) : (fabsf(slopeGrad) * 5.0f * stepDist);
+                F32 slopePenalty = (slopeGrad > 0.0f) ? (slopeGrad * slopeGrad * 90.0f * stepDist) : (fabsf(slopeGrad) * 2.0f * stepDist);
                 F32 stepCost = stepDist + slopePenalty;
 
                 F32 newG = Grid[cx][cz].gCost + stepCost;
@@ -561,6 +732,8 @@ namespace ShaiyaOverlay
 
     void NavigationManager::WalkTo(const Vector3& Target, const char* TargetName, F32 StopDistance)
     {
+        InitWorker();
+
         TargetPos = Target;
         F32 GroundY = GetGroundHeight(TargetPos.X, TargetPos.Z);
         if (GroundY != 0.0f)
@@ -588,31 +761,47 @@ namespace ShaiyaOverlay
             Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosZ, &StartPos.Z);
         }
 
-        WaypointCount = BuildPath(StartPos, TargetPos, Waypoints, 64);
-        CurrentWaypointIndex = 0;
         PathStartPos = StartPos;
         LastStuckCheckPos = StartPos;
         LastStuckCheckTick = GetTickCount();
 
-        Logger::Info("Navigation: Path generated with %u waypoints.", WaypointCount);
-
-        HWND Hwnd = GetGameHwnd();
-        if (Hwnd)
+        // Fast path: if direct line has direct line-of-sight and walkable slope, start immediately with 0 latency
+        if (CheckLineOfSight(StartPos, TargetPos) && IsSegmentWalkable(StartPos, TargetPos))
         {
-            PostMessageA(Hwnd, WM_KEYDOWN, 'W', 1 | (0x11 << 16));
-            KeyIsDown = true;
+            WaypointCount = 1;
+            Waypoints[0] = TargetPos;
+            CurrentWaypointIndex = 0;
+            ComputingPath.store(false);
+            PathReady.store(false);
+
+            Logger::Info("Navigation: Direct clear path with 1 waypoint.");
+
+            HWND Hwnd = GetGameHwnd();
+            if (Hwnd)
+            {
+                PostMessageA(Hwnd, WM_KEYDOWN, 'W', 1 | (0x11 << 16));
+                KeyIsDown = true;
+            }
+
+            if (Offsets.KeyBuffer)
+            {
+                UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+                *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
+                KeyIsDown = true;
+            }
+            return;
         }
 
-        if (Offsets.KeyBuffer)
-        {
-            UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
-            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
-            KeyIsDown = true;
-        }
+        // Direct path blocked by obstacle: calculate path asynchronously in background thread!
+        RequestAsyncPath(StartPos, TargetPos);
     }
 
     void NavigationManager::Stop()
     {
+        CancelRequested.store(true);
+        ComputingPath.store(false);
+        PathReady.store(false);
+
         if (!Active && !KeyIsDown)
             return;
 
@@ -657,6 +846,48 @@ namespace ShaiyaOverlay
                 Logger::Info("Navigation: Manual cancel detected.");
                 Stop();
                 return;
+            }
+        }
+
+        // If path is currently being computed asynchronously:
+        if (ComputingPath.load())
+        {
+            // Keep game rendering smoothly without blocking
+            return;
+        }
+
+        // If async path calculation just finished:
+        if (PathReady.load())
+        {
+            PathReady.store(false);
+
+            EnterCriticalSection(&PathLock);
+            WaypointCount = StagedWaypointCount;
+            for (U32 i = 0; i < WaypointCount; ++i)
+                Waypoints[i] = StagedWaypoints[i];
+            LeaveCriticalSection(&PathLock);
+
+            CurrentWaypointIndex = 0;
+            Logger::Info("Navigation: Async path ready with %u waypoints.", WaypointCount);
+
+            if (WaypointCount == 0)
+            {
+                Logger::Info("Navigation: No path found to target.");
+                Stop();
+                return;
+            }
+
+            if (Hwnd)
+            {
+                PostMessageA(Hwnd, WM_KEYDOWN, 'W', 1 | (0x11 << 16));
+                KeyIsDown = true;
+            }
+
+            if (Offsets.KeyBuffer)
+            {
+                UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+                *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
+                KeyIsDown = true;
             }
         }
 
@@ -705,7 +936,7 @@ namespace ShaiyaOverlay
 
             if (MovedDist < 0.20f)
             {
-                Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s, rem=%.1fm). Re-routing...", MovedDist, RemainingDistance);
+                Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s, rem=%.1fm). Re-routing asynchronously...", MovedDist, RemainingDistance);
 
                 // Release key briefly to stop momentum/sliding
                 if (Offsets.KeyBuffer)
@@ -719,21 +950,12 @@ namespace ShaiyaOverlay
                     KeyIsDown = false;
                 }
 
-                WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 64);
-                CurrentWaypointIndex = 0;
                 PathStartPos = CurPos;
                 DetourLockTick = Now;
-
-                if (WaypointCount == 0)
-                {
-                    Logger::Info("Navigation: Re-route found no path. Stopping.");
-                    Stop();
-                    return;
-                }
-
-                // Give detour at least 4.0s before another stuck check can trigger
                 LastStuckCheckPos = CurPos;
                 LastStuckCheckTick = Now + 1500;
+
+                RequestAsyncPath(CurPos, TargetPos);
                 return;
             }
 

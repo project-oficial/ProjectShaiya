@@ -4,6 +4,7 @@
 #include "Hooks/WndProcHook.h"
 #include "Game/GameOffsets.h"
 #include "Game/Login/AutoLoginManager.h"
+#include "Game/Navigation/NavigationManager.h"
 #include "Core/MCPTool/MCPBridge.h"
 
 namespace ShaiyaOverlay
@@ -59,6 +60,7 @@ namespace ShaiyaOverlay
         Logger::Info("Unload requested. Cleaning up resources...");
 
         AutoLoginManager::Shutdown();
+        NavigationManager::Shutdown();
 
         WndProcHook::RequestUnload();
 
