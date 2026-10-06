@@ -50,7 +50,7 @@ namespace ShaiyaOverlay
                     U8 TType = 0;
                     U16 BaseCd = 0;
                     Memory::ReadSafe(RecPtr + 50, &Cat);
-                    Memory::ReadSafe(RecPtr + 62, &TType);
+                    Memory::ReadSafe(RecPtr + 0x4C, &TType);
                     Memory::ReadSafe(RecPtr + 88, &BaseCd);
 
                     if (OutPassive) *OutPassive = (Cat == 10);
@@ -131,7 +131,7 @@ namespace ShaiyaOverlay
                                 U8 TType = 0;
                                 U16 BaseCd = 0;
                                 Memory::ReadSafe(LNode + 0x32, &Cat);
-                                Memory::ReadSafe(LNode + 0x3E, &TType);
+                                Memory::ReadSafe(LNode + 0x64, &TType);
                                 Memory::ReadSafe(LNode + 0x58, &BaseCd);
                                 if (OutPassive) *OutPassive = (Cat == 10);
                                 if (OutTargetType) *OutTargetType = TType;
@@ -327,7 +327,7 @@ namespace ShaiyaOverlay
                     {
                         if (Mobs[M].WorldId == TargetWorldId)
                         {
-                            if (Mobs[M].Alive)
+                            if (Mobs[M].Alive && Mobs[M].CurrentHp > 0)
                                 return TargetWorldId;
                             else
                                 return 0; // Target is dead, do not target corpse
@@ -340,15 +340,42 @@ namespace ShaiyaOverlay
         return 0;
     }
 
+    bool SkillManager::HasAliveTarget()
+    {
+        return GetSelectedTargetWorldId() != 0;
+    }
+
+    void SkillManager::SetTarget(U32 TargetWorldId)
+    {
+        U64 LocalPlayerPtr = 0;
+        if (Offsets.WorldManager && Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
+        {
+            *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = TargetWorldId;
+            if (Offsets.TargetTypeAddr)
+            {
+                *reinterpret_cast<U32*>(Offsets.TargetTypeAddr) = (TargetWorldId == 0xFFFFFFFF || TargetWorldId == 0) ? 0xFFFFFFFF : 0;
+            }
+        }
+    }
+
     bool SkillManager::CastSkill(U8 LearnedSlot, U8 TargetType, U32 ExplicitTargetId)
     {
         if (!Offsets.CastSkillAddr || LearnedSlot == 0xFF)
             return false;
 
+        const bool IsBuff = (TargetType == 0 || TargetType == 8);
         U32 TargetWorldId = 0;
 
-        if (TargetType == 0) // Self / Ally Buff
+        if (IsBuff)
         {
+            if (Offsets.SendCharBuffPacketAddr)
+            {
+                using tSendCharBuffPacket = __int64(__fastcall*)(U8 SlotIndex, U32 TargetId);
+                auto BuffFn = reinterpret_cast<tSendCharBuffPacket>(Offsets.SendCharBuffPacketAddr);
+                BuffFn(LearnedSlot, 0);
+                return true;
+            }
+
             if (Offsets.PlayerId)
                 Memory::ReadSafe(Offsets.PlayerId, &TargetWorldId);
         }
@@ -363,34 +390,8 @@ namespace ShaiyaOverlay
                 TargetWorldId = GetSelectedTargetWorldId();
             }
 
-            if (TargetWorldId == 0)
-            {
-                // Auto-target closest alive monster within 25m
-                const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
-                F32 MinDist = 25.0f;
-                U32 BestId = 0;
-                for (U32 M = 0; M < Mobs.GetCount(); ++M)
-                {
-                    if (Mobs[M].Alive && Mobs[M].Distance < MinDist)
-                    {
-                        MinDist = Mobs[M].Distance;
-                        BestId = Mobs[M].WorldId;
-                    }
-                }
-                TargetWorldId = BestId;
-
-                if (TargetWorldId != 0 && Offsets.WorldManager)
-                {
-                    U64 LocalPlayerPtr = 0;
-                    if (Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) && LocalPlayerPtr)
-                    {
-                        *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = TargetWorldId;
-                    }
-                }
-            }
-
-            // If still no valid alive target, abort rather than sending 0
-            if (TargetWorldId == 0)
+            // Must have a valid alive target currently selected
+            if (TargetWorldId == 0 || TargetWorldId == 0xFFFFFFFF)
                 return false;
         }
 
@@ -399,7 +400,16 @@ namespace ShaiyaOverlay
 
         __try
         {
-            Fn(LearnedSlot, TargetWorldId);
+            if (TargetType == 0 && Offsets.SendCharBuffPacketAddr)
+            {
+                using tSendCharBuffPacket = __int64(__fastcall*)(U8 SlotIndex, U32 TargetId);
+                auto BuffFn = reinterpret_cast<tSendCharBuffPacket>(Offsets.SendCharBuffPacketAddr);
+                BuffFn(LearnedSlot, 0);
+            }
+            else
+            {
+                Fn(LearnedSlot, TargetWorldId);
+            }
 
             // Record cast timestamp for instant cooldown countdown
             if (Offsets.SkillVector)

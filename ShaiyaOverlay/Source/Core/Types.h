@@ -68,6 +68,16 @@ namespace ShaiyaOverlay
             return true;
         }
 
+        bool RemoveAt(U32 Index)
+        {
+            if (Index >= Count)
+                return false;
+            for (U32 i = Index; i < Count - 1; ++i)
+                Items[i] = Items[i + 1];
+            --Count;
+            return true;
+        }
+
         U32 GetCount() const { return Count; }
         U32 GetCapacity() const { return Capacity; }
 

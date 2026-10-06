@@ -42,9 +42,11 @@ namespace ShaiyaOverlay
         static Vector3 Waypoints[64];
         static U32 WaypointCount;
         static U32 CurrentWaypointIndex;
+        static Vector3 PathStartPos;
 
         // Dynamic stuck detection & re-routing
         static Vector3 LastStuckCheckPos;
         static U32 LastStuckCheckTick;
+        static U32 DetourLockTick;
     };
 }

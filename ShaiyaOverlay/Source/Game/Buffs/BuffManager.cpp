@@ -1,11 +1,212 @@
 #include "BuffManager.h"
 #include "Core/Memory.h"
 #include "Core/StringUtils.h"
+#include "Core/Logger.h"
 #include "Game/GameOffsets.h"
+#include "Game/Entities/EntityManager.h"
+#include "Game/Skills/SkillManager.h"
 
 namespace ShaiyaOverlay
 {
     FixedList<BuffInfo, 32> BuffManager::ActiveBuffs;
+    FixedList<U16, 16> BuffManager::AutoBuffSkillIds;
+    AutoBuffConfig BuffManager::Config;
+    U32 BuffManager::LastBuffCastTick = 0;
+    bool BuffManager::ConfigLoaded = false;
+
+    static void GetAutoBuffIniPath(char* OutPath, U32 MaxLen)
+    {
+        GetModuleFileNameA(NULL, OutPath, MaxLen);
+        char* pLastSlash = strrchr(OutPath, '\\');
+        if (pLastSlash)
+            *(pLastSlash + 1) = '\0';
+        strcat_s(OutPath, MaxLen, "auto_buff.ini");
+    }
+
+    void BuffManager::LoadAutoBuffConfig()
+    {
+        AutoBuffSkillIds.Clear();
+        ConfigLoaded = true;
+
+        char IniPath[MAX_PATH] = { 0 };
+        GetAutoBuffIniPath(IniPath, sizeof(IniPath));
+
+        if (GetFileAttributesA(IniPath) == INVALID_FILE_ATTRIBUTES)
+            return;
+
+        Config.Enabled = (GetPrivateProfileIntA("AutoBuff", "Enabled", 1, IniPath) != 0);
+        Config.RecastThresholdSeconds = GetPrivateProfileIntA("AutoBuff", "RecastThresholdSeconds", 3, IniPath);
+
+        char SectionBuffer[4096] = { 0 };
+        DWORD BytesRead = GetPrivateProfileSectionA("AutoBuffSkills", SectionBuffer, sizeof(SectionBuffer), IniPath);
+        if (BytesRead == 0)
+            return;
+
+        const char* pKey = SectionBuffer;
+        while (*pKey && AutoBuffSkillIds.GetCount() < 16)
+        {
+            // format: Skill_<Id>=1
+            if (strncmp(pKey, "Skill_", 6) == 0)
+            {
+                U32 Id = static_cast<U32>(atoi(pKey + 6));
+                if (Id > 0 && Id <= 0xFFFF)
+                {
+                    AutoBuffSkillIds.Add(static_cast<U16>(Id));
+                }
+            }
+            pKey += strlen(pKey) + 1;
+        }
+    }
+
+    void BuffManager::SaveAutoBuffConfig()
+    {
+        char IniPath[MAX_PATH] = { 0 };
+        GetAutoBuffIniPath(IniPath, sizeof(IniPath));
+
+        WritePrivateProfileStringA("AutoBuff", "Enabled", Config.Enabled ? "1" : "0", IniPath);
+
+        char szVal[16];
+        StringUtils::Format(szVal, sizeof(szVal), "%u", Config.RecastThresholdSeconds);
+        WritePrivateProfileStringA("AutoBuff", "RecastThresholdSeconds", szVal, IniPath);
+
+        WritePrivateProfileSectionA("AutoBuffSkills", "", IniPath);
+        for (U32 i = 0; i < AutoBuffSkillIds.GetCount(); ++i)
+        {
+            char szKey[32];
+            StringUtils::Format(szKey, sizeof(szKey), "Skill_%u", AutoBuffSkillIds[i]);
+            WritePrivateProfileStringA("AutoBuffSkills", szKey, "1", IniPath);
+        }
+    }
+
+    bool BuffManager::HasBuff(U16 SkillId, U32* OutRemainingSeconds)
+    {
+        for (U32 i = 0; i < ActiveBuffs.GetCount(); ++i)
+        {
+            if (ActiveBuffs[i].BuffId == SkillId)
+            {
+                if (OutRemainingSeconds)
+                    *OutRemainingSeconds = ActiveBuffs[i].DurationSeconds;
+                return true;
+            }
+        }
+        if (OutRemainingSeconds)
+            *OutRemainingSeconds = 0;
+        return false;
+    }
+
+    bool BuffManager::IsAutoBuff(U16 SkillId)
+    {
+        if (!ConfigLoaded)
+            LoadAutoBuffConfig();
+
+        for (U32 i = 0; i < AutoBuffSkillIds.GetCount(); ++i)
+        {
+            if (AutoBuffSkillIds[i] == SkillId)
+                return true;
+        }
+        return false;
+    }
+
+    void BuffManager::SetAutoBuff(U16 SkillId, bool Enable)
+    {
+        if (!ConfigLoaded)
+            LoadAutoBuffConfig();
+
+        if (Enable)
+        {
+            for (U32 i = 0; i < AutoBuffSkillIds.GetCount(); ++i)
+            {
+                if (AutoBuffSkillIds[i] == SkillId)
+                    return;
+            }
+            if (AutoBuffSkillIds.GetCount() < 16)
+            {
+                AutoBuffSkillIds.Add(SkillId);
+                SaveAutoBuffConfig();
+            }
+        }
+        else
+        {
+            for (U32 i = 0; i < AutoBuffSkillIds.GetCount(); ++i)
+            {
+                if (AutoBuffSkillIds[i] == SkillId)
+                {
+                    AutoBuffSkillIds.RemoveAt(i);
+                    SaveAutoBuffConfig();
+                    return;
+                }
+            }
+        }
+    }
+
+    bool BuffManager::CastBuff(U8 LearnedSlot)
+    {
+        if (!Offsets.SendCharBuffPacketAddr || LearnedSlot == 0xFF)
+            return false;
+
+        using tSendCharBuffPacket = __int64(__fastcall*)(U8 SlotIndex, U32 TargetId);
+        auto Fn = reinterpret_cast<tSendCharBuffPacket>(Offsets.SendCharBuffPacketAddr);
+
+        __try
+        {
+            Fn(LearnedSlot, 0);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER)
+        {
+            return false;
+        }
+    }
+
+    void BuffManager::ProcessAutoBuffs()
+    {
+        if (!ConfigLoaded)
+            LoadAutoBuffConfig();
+
+        if (!Config.Enabled || AutoBuffSkillIds.GetCount() == 0)
+            return;
+
+        const PlayerData& Player = EntityManager::GetLocalPlayer();
+        if (!Player.Valid || Player.CurrentHp == 0)
+            return;
+
+        U32 Now = GetTickCount();
+        if (Now - LastBuffCastTick < 1400) // 1.4s between buff casts
+            return;
+
+        const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
+        U32 SkillCount = Skills.GetCount();
+
+        for (U32 i = 0; i < AutoBuffSkillIds.GetCount(); ++i)
+        {
+            U16 TargetSkillId = AutoBuffSkillIds[i];
+
+            // 1. Check if buff is currently active with remaining duration > threshold
+            U32 RemSec = 0;
+            if (HasBuff(TargetSkillId, &RemSec) && RemSec > Config.RecastThresholdSeconds)
+                continue;
+
+            // 2. Find skill in learned skill list
+            for (U32 S = 0; S < SkillCount; ++S)
+            {
+                const SkillInfo& Skill = Skills[S];
+                if (Skill.SkillId == TargetSkillId)
+                {
+                    if (Skill.IsLearned && Skill.LearnedSlot != 0xFF && Skill.IsReady)
+                    {
+                        if (CastBuff(Skill.LearnedSlot))
+                        {
+                            LastBuffCastTick = Now;
+                            Logger::Info("AutoBuff: Recasting %s (SkillId: %u, Slot: %u)",
+                                Skill.Name, Skill.SkillId, Skill.LearnedSlot);
+                            return; // One buff per tick
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+    }
 
     void BuffManager::Update()
     {
@@ -97,5 +298,7 @@ namespace ShaiyaOverlay
 
             ActiveBuffs.Add(Buff);
         }
+
+        ProcessAutoBuffs();
     }
 }

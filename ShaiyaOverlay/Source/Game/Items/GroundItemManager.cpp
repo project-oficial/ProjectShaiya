@@ -1,12 +1,27 @@
 #include "GroundItemManager.h"
 #include "Core/Memory.h"
 #include "Core/StringUtils.h"
+#include "Core/Logger.h"
 #include "Game/GameOffsets.h"
 #include "Game/Entities/EntityManager.h"
+#include "Game/Navigation/NavigationManager.h"
 
 namespace ShaiyaOverlay
 {
     FixedList<GroundItem, 128> GroundItemManager::Items;
+    AutoLootConfig GroundItemManager::Config;
+    U32 GroundItemManager::LastLootTick = 0;
+
+    bool GroundItemManager::PickUp(U32 ItemWorldId)
+    {
+        if (!Offsets.SendPickUpAddr || ItemWorldId == 0)
+            return false;
+
+        using tSendPickUp = __int64(__fastcall*)(U32);
+        auto Fn = reinterpret_cast<tSendPickUp>(Offsets.SendPickUpAddr);
+        Fn(ItemWorldId);
+        return true;
+    }
 
     const char* GroundItemManager::GetCategoryName(U8 Type)
     {
@@ -155,6 +170,54 @@ namespace ShaiyaOverlay
 
             CurrentNode = NextNode;
             ++Iterations;
+        }
+
+        // Auto-Loot / PickUp processing
+        if (Config.Enabled && Player.Valid && Items.GetCount() > 0)
+        {
+            U32 Now = GetTickCount();
+            const GroundItem* ClosestWalkTarget = nullptr;
+            F32 ClosestWalkDist = 99999.0f;
+
+            for (U32 i = 0; i < Items.GetCount(); ++i)
+            {
+                const GroundItem& Item = Items[i];
+                if (Item.WorldId == 0)
+                    continue;
+
+                // Ownership filter: only pick up items owned by player or free-for-all
+                if (Config.OnlyMyDrops && Item.OwnerId != 0 && Item.OwnerId != Player.Id)
+                    continue;
+
+                // 1. Direct pickup if within pickup radius
+                if (Item.Distance <= Config.PickupRadius)
+                {
+                    // Rate limit: 1 pickup packet every 120ms
+                    if (Now - LastLootTick >= 120)
+                    {
+                        PickUp(Item.WorldId);
+                        LastLootTick = Now;
+                        Logger::Info("AutoLoot: Picked up %s (WorldId: %u, Dist: %.1fm)",
+                            Item.Name, Item.WorldId, Item.Distance);
+                        break;
+                    }
+                }
+                // 2. Candidate for auto-walk if enabled and within walk distance
+                else if (Config.AutoWalkToLoot && Item.Distance <= Config.MaxWalkDistance)
+                {
+                    if (Item.Distance < ClosestWalkDist)
+                    {
+                        ClosestWalkDist = Item.Distance;
+                        ClosestWalkTarget = &Item;
+                    }
+                }
+            }
+
+            // Auto-walk to nearest drop if not already in range and not navigating elsewhere
+            if (ClosestWalkTarget && !NavigationManager::IsNavigating())
+            {
+                NavigationManager::WalkTo(ClosestWalkTarget->Position, ClosestWalkTarget->Name, 1.5f);
+            }
         }
     }
 }

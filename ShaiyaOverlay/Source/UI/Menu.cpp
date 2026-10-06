@@ -8,6 +8,7 @@
 #include "Game/Skills/SkillManager.h"
 #include "Game/Buffs/BuffManager.h"
 #include "Game/Combat/RiskCalculator.h"
+#include "Game/Combat/ComboManager.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Items/InventoryManager.h"
 #include "Game/QuickSlots/QuickSlotManager.h"
@@ -60,6 +61,7 @@ namespace ShaiyaOverlay
         QuickSlotManager::Update();
         QuestManager::Update();
         NavigationManager::Update();
+        ComboManager::Update();
 
         const PlayerData& Player = EntityManager::GetLocalPlayer();
         const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
@@ -69,8 +71,12 @@ namespace ShaiyaOverlay
         ImGui::GetIO().MouseDrawCursor = WndProcHook::IsMenuOpen();
 
         // Always-on Hardcore Threat Banner (visible whether menu is toggled or not)
+        F32 BannerHeight = 75.0f;
+        if (NavigationManager::IsNavigating()) BannerHeight += 20.0f;
+        if (ComboManager::IsActive()) BannerHeight += 20.0f;
+
         ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(400.0f, NavigationManager::IsNavigating() ? 95.0f : 75.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(400.0f, BannerHeight), ImGuiCond_Always);
 
         ImGuiWindowFlags BannerFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
         if (!WndProcHook::IsMenuOpen())
@@ -109,6 +115,19 @@ namespace ShaiyaOverlay
                     }
                 }
             }
+
+            if (ComboManager::IsActive())
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.0f, 1.0f), ">> AUTO-COMBO: ATIVO (Tecla: C)");
+                if (WndProcHook::IsMenuOpen())
+                {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("STOP COMBO"))
+                    {
+                        ComboManager::SetActive(false);
+                    }
+                }
+            }
         }
         ImGui::End();
 
@@ -128,6 +147,7 @@ namespace ShaiyaOverlay
         RenderQuickSlotsWindow();
         RenderQuestsWindow();
         RenderBuffsWindow();
+        RenderAutoComboWindow();
     }
 
     void Menu::RenderOverviewWindow()
@@ -327,19 +347,39 @@ namespace ShaiyaOverlay
 
         if (ImGui::Begin("Ground Loot & Dropped Items"))
         {
-            ImGui::Checkbox("Draw Tracer Lines to Ground Items", &SnaplinesEnabled);
+            AutoLootConfig& LootCfg = GroundItemManager::GetConfig();
+            ImGui::Checkbox("Auto-Loot", &LootCfg.Enabled);
             ImGui::SameLine();
-            ImGui::TextDisabled("| Total on Ground: %u", ItemCount);
+            ImGui::Checkbox("Only My Drops", &LootCfg.OnlyMyDrops);
+            ImGui::SameLine();
+            ImGui::Checkbox("Auto-Walk", &LootCfg.AutoWalkToLoot);
+            ImGui::SameLine();
+            ImGui::Checkbox("Tracer Lines", &SnaplinesEnabled);
+            ImGui::SameLine();
+            ImGui::TextDisabled("| Total: %u", ItemCount);
+
+            if (LootCfg.Enabled)
+            {
+                ImGui::SetNextItemWidth(110.0f);
+                ImGui::SliderFloat("Pickup Radius", &LootCfg.PickupRadius, 1.5f, 5.0f, "%.1fm");
+                if (LootCfg.AutoWalkToLoot)
+                {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(110.0f);
+                    ImGui::SliderFloat("Max Walk Dist", &LootCfg.MaxWalkDistance, 5.0f, 40.0f, "%.0fm");
+                }
+            }
             ImGui::Separator();
 
-            if (ImGui::BeginTable("GroundItemsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTable("GroundItemsTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
             {
                 ImGui::TableSetupColumn("Item Name", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 85.0f);
-                ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableSetupColumn("World ID", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableSetupColumn("Nav", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+                ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+                ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+                ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+                ImGui::TableSetupColumn("Pick", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("Walk", ImGuiTableColumnFlags_WidthFixed, 40.0f);
                 ImGui::TableHeadersRow();
 
                 if (ItemCount == 0)
@@ -351,10 +391,12 @@ namespace ShaiyaOverlay
                     ImGui::TableSetColumnIndex(3); ImGui::Text("-");
                     ImGui::TableSetColumnIndex(4); ImGui::Text("-");
                     ImGui::TableSetColumnIndex(5); ImGui::Text("-");
+                    ImGui::TableSetColumnIndex(6); ImGui::Text("-");
                 }
                 else
                 {
                     const FixedList<ActiveQuest, 16>& ActiveQuests = QuestManager::GetActiveQuests();
+                    const PlayerData& Player = EntityManager::GetLocalPlayer();
 
                     for (U32 I = 0; I < ItemCount; ++I)
                     {
@@ -404,9 +446,22 @@ namespace ShaiyaOverlay
                         ImGui::Text("%.1fm", Item.Distance);
 
                         ImGui::TableSetColumnIndex(4);
-                        ImGui::Text("%u", Item.WorldId);
+                        if (Item.OwnerId == 0)
+                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Free");
+                        else if (Player.Valid && Item.OwnerId == Player.Id)
+                            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Mine");
+                        else
+                            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%u", Item.OwnerId);
 
                         ImGui::TableSetColumnIndex(5);
+                        char PickBtn[32];
+                        StringUtils::Format(PickBtn, sizeof(PickBtn), "Pick##%u", Item.WorldId);
+                        if (ImGui::Button(PickBtn, ImVec2(-1.0f, 0.0f)))
+                        {
+                            GroundItemManager::PickUp(Item.WorldId);
+                        }
+
+                        ImGui::TableSetColumnIndex(6);
                         char ItemBtn[32];
                         StringUtils::Format(ItemBtn, sizeof(ItemBtn), "Walk##I%u", Item.WorldId);
                         if (ImGui::Button(ItemBtn, ImVec2(-1.0f, 0.0f)))
@@ -788,6 +843,17 @@ namespace ShaiyaOverlay
             ImGui::Checkbox("Somente Aprendidas", &FilterOnlyLearned);
             ImGui::SameLine();
             ImGui::TextDisabled("(%u/%u)", LearnedCount, SkillCount);
+            ImGui::SameLine();
+
+            AutoBuffConfig& BuffCfg = BuffManager::GetConfig();
+            ImGui::Checkbox("Auto-Buff", &BuffCfg.Enabled);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(70.0f);
+            int thresh = static_cast<int>(BuffCfg.RecastThresholdSeconds);
+            if (ImGui::SliderInt("Recast <= s", &thresh, 1, 30))
+            {
+                BuffCfg.RecastThresholdSeconds = static_cast<U32>(thresh);
+            }
 
             U32 TargetWorldId = SkillManager::GetSelectedTargetWorldId();
             const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
@@ -817,14 +883,15 @@ namespace ShaiyaOverlay
 
             ImGui::Separator();
 
-            if (ImGui::BeginTable("SkillsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTable("SkillsTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
             {
                 ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 35.0f);
                 ImGui::TableSetupColumn("Habilidade", ImGuiTableColumnFlags_WidthStretch);
                 ImGui::TableSetupColumn("Nv", ImGuiTableColumnFlags_WidthFixed, 25.0f);
-                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-                ImGui::TableSetupColumn("Estado", ImGuiTableColumnFlags_WidthFixed, 75.0f);
-                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+                ImGui::TableSetupColumn("Estado", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+                ImGui::TableSetupColumn("Auto", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 50.0f);
                 ImGui::TableHeadersRow();
 
                 for (U32 I = 0; I < SkillCount; ++I)
@@ -880,6 +947,26 @@ namespace ShaiyaOverlay
                     }
 
                     ImGui::TableSetColumnIndex(5);
+                    if (Skill.IsLearned && !Skill.IsPassive)
+                    {
+                        bool isAuto = BuffManager::IsAutoBuff(Skill.SkillId);
+                        char CheckId[32];
+                        StringUtils::Format(CheckId, sizeof(CheckId), "##AB%u", Skill.SkillId);
+                        if (ImGui::Checkbox(CheckId, &isAuto))
+                        {
+                            BuffManager::SetAutoBuff(Skill.SkillId, isAuto);
+                        }
+                        if (ImGui::IsItemHovered())
+                        {
+                            ImGui::SetTooltip(isAuto ? "Auto-Buff ATIVO (recast automático ao expirar)" : "Marcar para Auto-Buff");
+                        }
+                    }
+                    else
+                    {
+                        ImGui::TextDisabled("-");
+                    }
+
+                    ImGui::TableSetColumnIndex(6);
                     if (!Skill.IsLearned || Skill.IsPassive)
                     {
                         ImGui::TextDisabled("-");
@@ -893,11 +980,227 @@ namespace ShaiyaOverlay
 
                         if (ImGui::SmallButton(BtnLabel))
                         {
-                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType, TargetWorldId);
+                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType);
                         }
 
                         if (!Skill.IsReady)
                             ImGui::EndDisabled();
+                    }
+                }
+
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+    }
+
+    void Menu::RenderAutoComboWindow()
+    {
+        ComboConfig& Cfg = ComboManager::GetConfig();
+        const FixedList<ComboEntry, 16>& Sequence = ComboManager::GetComboSequence();
+        U32 SeqCount = Sequence.GetCount();
+
+        ImGui::SetNextWindowPos(ImVec2(520.0f, 335.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(450.0f, 260.0f), ImGuiCond_FirstUseEver);
+
+        if (ImGui::Begin("Auto-Combo / Skill Rotation"))
+        {
+            ImGui::Checkbox("Habilitar", &Cfg.Enabled);
+            ImGui::SameLine();
+            if (Cfg.Active)
+            {
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "[ATIVO]");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Parar (C)"))
+                {
+                    ComboManager::SetActive(false);
+                }
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "[INATIVO]");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Iniciar (C)"))
+                {
+                    ComboManager::SetActive(true);
+                }
+            }
+
+            ImGui::SameLine();
+            ImGui::Checkbox("Segurar Tecla", &Cfg.HoldKeyMode);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Marcado: combe enquanto segurar a tecla 'C'.\nDesmarcado: aperte 'C' para ligar/desligar.");
+            }
+
+            ImGui::SetNextItemWidth(90.0f);
+            int delayMs = static_cast<int>(Cfg.CastDelayMs);
+            if (ImGui::SliderInt("Delay (ms)", &delayMs, 600, 2500))
+            {
+                Cfg.CastDelayMs = static_cast<U32>(delayMs);
+            }
+
+            U32 TargetWorldId = SkillManager::GetSelectedTargetWorldId();
+            if (TargetWorldId != 0)
+            {
+                const char* TargetName = "Monstro";
+                U32 CurHp = 0, MaxHp = 0;
+                const auto& Mobs = EntityManager::GetNearbyMonsters();
+                for (U32 m = 0; m < Mobs.GetCount(); ++m)
+                {
+                    if (Mobs[m].WorldId == TargetWorldId)
+                    {
+                        TargetName = Mobs[m].Name;
+                        CurHp = Mobs[m].CurrentHp;
+                        MaxHp = Mobs[m].MaxHp;
+                        break;
+                    }
+                }
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "Alvo: %s (%u/%u)", TargetName, CurHp, MaxHp);
+            }
+            else
+            {
+                ImGui::TextDisabled("Alvo: Nenhum (selecione um monstro vivo para atacar)");
+            }
+
+            ImGui::Separator();
+
+            // Skill selector to add to rotation sequence
+            const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
+            U32 SkillCount = Skills.GetCount();
+
+            static int SelectedSkillIdx = 0;
+            char PreviewText[128] = "Selecione uma habilidade...";
+            if (SelectedSkillIdx >= 0 && SelectedSkillIdx < (int)SkillCount)
+            {
+                StringUtils::Format(PreviewText, sizeof(PreviewText), "%s (ID: %u, Slot: %u)",
+                    Skills[SelectedSkillIdx].Name, Skills[SelectedSkillIdx].SkillId, Skills[SelectedSkillIdx].LearnedSlot);
+            }
+
+            ImGui::SetNextItemWidth(250.0f);
+            if (ImGui::BeginCombo("##AddComboSkill", PreviewText))
+            {
+                for (U32 i = 0; i < SkillCount; ++i)
+                {
+                    const SkillInfo& Skill = Skills[i];
+                    if (!Skill.IsLearned || Skill.IsPassive)
+                        continue;
+
+                    char ItemLabel[128];
+                    StringUtils::Format(ItemLabel, sizeof(ItemLabel), "%s (ID: %u, Slot: %u)##Cmb%u",
+                        Skill.Name, Skill.SkillId, Skill.LearnedSlot, i);
+
+                    bool isSelected = (SelectedSkillIdx == (int)i);
+                    if (ImGui::Selectable(ItemLabel, isSelected))
+                    {
+                        SelectedSkillIdx = static_cast<int>(i);
+                    }
+                    if (isSelected)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("+ Adicionar"))
+            {
+                if (SelectedSkillIdx >= 0 && SelectedSkillIdx < (int)SkillCount)
+                {
+                    const SkillInfo& S = Skills[SelectedSkillIdx];
+                    if (S.IsLearned && !S.IsPassive)
+                    {
+                        ComboManager::AddSkillToSequence(S.SkillId, S.Name);
+                    }
+                }
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Limpar"))
+            {
+                ComboManager::ClearSequence();
+            }
+
+            // Sequence Table
+            if (ImGui::BeginTable("ComboSeqTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            {
+                ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 25.0f);
+                ImGui::TableSetupColumn("Habilidade", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+                ImGui::TableSetupColumn("Ordem", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+                ImGui::TableHeadersRow();
+
+                if (SeqCount == 0)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::Text("-");
+                    ImGui::TableSetColumnIndex(1); ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Nenhuma habilidade no combo");
+                    ImGui::TableSetColumnIndex(2); ImGui::Text("-");
+                    ImGui::TableSetColumnIndex(3); ImGui::Text("-");
+                    ImGui::TableSetColumnIndex(4); ImGui::Text("-");
+                }
+                else
+                {
+                    for (U32 i = 0; i < SeqCount; ++i)
+                    {
+                        const ComboEntry& Entry = Sequence[i];
+                        ImGui::TableNextRow();
+
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%u", i + 1);
+
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::Text("%s", Entry.Name);
+
+                        ImGui::TableSetColumnIndex(2);
+                        F32 cdRem = 0.0f;
+                        bool ready = true;
+                        for (U32 s = 0; s < SkillCount; ++s)
+                        {
+                            if (Skills[s].SkillId == Entry.SkillId)
+                            {
+                                cdRem = Skills[s].CooldownRemaining;
+                                ready = Skills[s].IsReady;
+                                break;
+                            }
+                        }
+
+                        if (ready)
+                        {
+                            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "PRONTA");
+                        }
+                        else
+                        {
+                            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%.1fs", cdRem);
+                        }
+
+                        ImGui::TableSetColumnIndex(3);
+                        char UpBtn[32], DownBtn[32];
+                        StringUtils::Format(UpBtn, sizeof(UpBtn), "^##U%u", i);
+                        StringUtils::Format(DownBtn, sizeof(DownBtn), "v##D%u", i);
+
+                        if (i == 0) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton(UpBtn))
+                        {
+                            ComboManager::MoveSkillUp(i);
+                        }
+                        if (i == 0) ImGui::EndDisabled();
+
+                        ImGui::SameLine();
+                        if (i + 1 >= SeqCount) ImGui::BeginDisabled();
+                        if (ImGui::SmallButton(DownBtn))
+                        {
+                            ComboManager::MoveSkillDown(i);
+                        }
+                        if (i + 1 >= SeqCount) ImGui::EndDisabled();
+
+                        ImGui::TableSetColumnIndex(4);
+                        char DelBtn[32];
+                        StringUtils::Format(DelBtn, sizeof(DelBtn), "X##R%u", i);
+                        if (ImGui::SmallButton(DelBtn))
+                        {
+                            ComboManager::RemoveSkillFromSequence(i);
+                        }
                     }
                 }
 

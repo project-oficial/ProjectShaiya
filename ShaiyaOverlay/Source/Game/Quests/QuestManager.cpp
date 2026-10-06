@@ -82,19 +82,12 @@ namespace ShaiyaOverlay
         if (!MobCacheLoaded)
             LoadMobCache();
 
+        // If already recorded for this quest and mob, NEVER update or overwrite
         for (U32 i = 0; i < SavedMobCache.GetCount(); ++i)
         {
-            auto& Entry = SavedMobCache[i];
+            const auto& Entry = SavedMobCache[i];
             if (Entry.QuestId == QuestId && Entry.MobId == MobId)
-            {
-                if (Entry.Position.DistanceTo(Pos) < 35.0f)
-                    return;
-
-                Entry.Position = Pos;
-                if (MobName && MobName[0] != '\0')
-                    StringUtils::Copy(Entry.MobName, MobName, sizeof(Entry.MobName));
-                goto WriteDisk;
-            }
+                return;
         }
 
         if (SavedMobCache.GetCount() < 128)
@@ -109,7 +102,6 @@ namespace ShaiyaOverlay
             SavedMobCache.Add(Entry);
         }
 
-    WriteDisk:
         char IniPath[MAX_PATH] = { 0 };
         GetQuestMobsIniPath(IniPath, sizeof(IniPath));
 
@@ -146,6 +138,7 @@ namespace ShaiyaOverlay
         if (!MobCacheLoaded)
             LoadMobCache();
 
+        // Exact match by QuestId + MobId
         for (U32 i = 0; i < SavedMobCache.GetCount(); ++i)
         {
             const auto& Entry = SavedMobCache[i];

@@ -127,6 +127,9 @@
     <ClInclude Include="Source\Game\Combat\RiskCalculator.h">
       <Filter>Source\Game\Combat</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Game\Combat\ComboManager.h">
+      <Filter>Source\Game\Combat</Filter>
+    </ClInclude>
     <ClInclude Include="Source\UI\Renderer.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
@@ -217,6 +220,9 @@
       <Filter>Source\Game\Buffs</Filter>
     </ClCompile>
     <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp">
+      <Filter>Source\Game\Combat</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Combat\ComboManager.cpp">
       <Filter>Source\Game\Combat</Filter>
     </ClCompile>
     <ClCompile Include="Source\UI\Renderer.cpp">

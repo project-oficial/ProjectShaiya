@@ -12,6 +12,7 @@
 #include "Game/Navigation/NavigationManager.h"
 #include "Game/Skills/SkillManager.h"
 #include "Game/Buffs/BuffManager.h"
+#include "Game/Combat/ComboManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "UI/Menu.h"
 
@@ -622,6 +623,144 @@ namespace ShaiyaOverlay
             sprintf_s(pResponse, nMaxLen, "{\"status\":\"ok\",\"action\":\"stop_walk\"}");
         }
 
+        static void HandlePickUpItem(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            double worldId = 0.0;
+            if (!extract_json_double(pRequest, "world_id", worldId) || worldId <= 0.0)
+            {
+                sprintf_s(pResponse, nMaxLen, "{\"status\":\"error\",\"message\":\"missing or invalid world_id parameter\"}");
+                return;
+            }
+
+            U32 wid = static_cast<U32>(worldId);
+            RunOnRenderThread([=]() {
+                GroundItemManager::PickUp(wid);
+            }, 500);
+
+            sprintf_s(pResponse, nMaxLen, "{\"status\":\"ok\",\"action\":\"pickup_item\",\"world_id\":%u}", wid);
+        }
+
+        static void HandleSetAutoLoot(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            AutoLootConfig& cfg = GroundItemManager::GetConfig();
+            bool enabledVal = cfg.Enabled;
+            if (extract_json_bool(pRequest, "enabled", enabledVal))
+                cfg.Enabled = enabledVal;
+
+            bool onlyMine = cfg.OnlyMyDrops;
+            if (extract_json_bool(pRequest, "only_my_drops", onlyMine))
+                cfg.OnlyMyDrops = onlyMine;
+
+            bool autoWalk = cfg.AutoWalkToLoot;
+            if (extract_json_bool(pRequest, "auto_walk", autoWalk))
+                cfg.AutoWalkToLoot = autoWalk;
+
+            double radius = cfg.PickupRadius;
+            if (extract_json_double(pRequest, "radius", radius) && radius > 0.5)
+                cfg.PickupRadius = static_cast<float>(radius);
+
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"action\":\"set_autoloot\",\"enabled\":%s,\"only_my_drops\":%s,\"auto_walk\":%s,\"radius\":%.1f}",
+                cfg.Enabled ? "true" : "false",
+                cfg.OnlyMyDrops ? "true" : "false",
+                cfg.AutoWalkToLoot ? "true" : "false",
+                cfg.PickupRadius);
+        }
+
+        static void HandleSetAutoBuff(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            AutoBuffConfig& cfg = BuffManager::GetConfig();
+            bool enabledVal = cfg.Enabled;
+            if (extract_json_bool(pRequest, "enabled", enabledVal))
+                cfg.Enabled = enabledVal;
+
+            double thresh = static_cast<double>(cfg.RecastThresholdSeconds);
+            if (extract_json_double(pRequest, "recast_seconds", thresh) && thresh >= 1.0)
+                cfg.RecastThresholdSeconds = static_cast<U32>(thresh);
+
+            double skillId = 0.0;
+            if (extract_json_double(pRequest, "skill_id", skillId) && skillId > 0.0)
+            {
+                bool activeVal = true;
+                extract_json_bool(pRequest, "active", activeVal);
+                BuffManager::SetAutoBuff(static_cast<U16>(skillId), activeVal);
+            }
+
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"action\":\"set_autobuff\",\"enabled\":%s,\"recast_seconds\":%u}",
+                cfg.Enabled ? "true" : "false",
+                cfg.RecastThresholdSeconds);
+        }
+
+        static void HandleGetCombo(char* pResponse, size_t nMaxLen)
+        {
+            const ComboConfig& cfg = ComboManager::GetConfig();
+            const auto& seq = ComboManager::GetComboSequence();
+
+            int written = sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"hotkey\":%u,\"delay_ms\":%u,\"sequence\":[",
+                cfg.Enabled ? "true" : "false",
+                cfg.Active ? "true" : "false",
+                cfg.HoldKeyMode ? "true" : "false",
+                cfg.Hotkey,
+                cfg.CastDelayMs);
+
+            if (written <= 0) return;
+            size_t offset = static_cast<size_t>(written);
+
+            for (U32 i = 0; i < seq.GetCount(); ++i)
+            {
+                char itemBuf[128];
+                int itemLen = sprintf_s(itemBuf, sizeof(itemBuf), "%s{\"step\":%u,\"skill_id\":%u,\"name\":\"%s\"}",
+                    (i > 0) ? "," : "", i + 1, seq[i].SkillId, seq[i].Name);
+                if (itemLen > 0 && (offset + itemLen + 8) < nMaxLen)
+                {
+                    memcpy(pResponse + offset, itemBuf, itemLen);
+                    offset += itemLen;
+                }
+            }
+            sprintf_s(pResponse + offset, nMaxLen - offset, "]}");
+        }
+
+        static void HandleSetAutoCombo(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            ComboConfig& cfg = ComboManager::GetConfig();
+            bool enabledVal = cfg.Enabled;
+            if (extract_json_bool(pRequest, "enabled", enabledVal))
+                cfg.Enabled = enabledVal;
+
+            bool activeVal = cfg.Active;
+            if (extract_json_bool(pRequest, "active", activeVal))
+                ComboManager::SetActive(activeVal);
+
+            bool holdVal = cfg.HoldKeyMode;
+            if (extract_json_bool(pRequest, "hold_mode", holdVal))
+                cfg.HoldKeyMode = holdVal;
+
+            double delayVal = static_cast<double>(cfg.CastDelayMs);
+            if (extract_json_double(pRequest, "delay_ms", delayVal) && delayVal >= 400.0)
+                cfg.CastDelayMs = static_cast<U32>(delayVal);
+
+            double addSkill = 0.0;
+            if (extract_json_double(pRequest, "add_skill_id", addSkill) && addSkill > 0.0)
+            {
+                ComboManager::AddSkillToSequence(static_cast<U16>(addSkill));
+            }
+
+            bool clearSeq = false;
+            if (extract_json_bool(pRequest, "clear", clearSeq) && clearSeq)
+            {
+                ComboManager::ClearSequence();
+            }
+
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"action\":\"set_autocombo\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"delay_ms\":%u}",
+                cfg.Enabled ? "true" : "false",
+                cfg.Active ? "true" : "false",
+                cfg.HoldKeyMode ? "true" : "false",
+                cfg.CastDelayMs);
+        }
+
         static void HandleCheckCollision(const char* pRequest, char* pResponse, size_t nMaxLen)
         {
             double sx = 0, sy = 0, sz = 0;
@@ -1066,23 +1205,7 @@ namespace ShaiyaOverlay
             if (extract_json_double(pRequestJson, "target_id", d))
                 targetId = static_cast<uint32_t>(d);
 
-            if (!Offsets.WorldManager)
-            {
-                sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"error\",\"message\":\"WorldManager not found\"}");
-                return;
-            }
-
-            U64 LocalPlayerPtr = 0;
-            if (!Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) || !LocalPlayerPtr)
-            {
-                sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"error\",\"message\":\"LocalPlayer not found\"}");
-                return;
-            }
-
-            *reinterpret_cast<U32*>(LocalPlayerPtr + Offsets.PlayerTargetWorldId) = targetId;
-            U64 TargetTypeGlobal = (Offsets.PlayerId - 0xA06AAC) + 0xA0FF5C;
-            if (TargetTypeGlobal)
-                *reinterpret_cast<U32*>(TargetTypeGlobal) = (targetId != 0 && targetId != 0xFFFFFFFF) ? 2 : 0;
+            SkillManager::SetTarget(targetId);
 
             sprintf_s(pResponseJson, nMaxLen, "{\"status\":\"ok\",\"action\":\"select_target\",\"target_id\":%u}", targetId);
         }
@@ -1209,6 +1332,26 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "stop_walk") == 0)
             {
                 HandleStopWalk(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "pickup_item") == 0)
+            {
+                HandlePickUpItem(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "set_autoloot") == 0)
+            {
+                HandleSetAutoLoot(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "set_autobuff") == 0)
+            {
+                HandleSetAutoBuff(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_combo") == 0)
+            {
+                HandleGetCombo(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "set_autocombo") == 0)
+            {
+                HandleSetAutoCombo(pRequestJson, pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "select_target") == 0)
             {

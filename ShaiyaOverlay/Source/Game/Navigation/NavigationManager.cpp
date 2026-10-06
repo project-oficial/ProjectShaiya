@@ -17,9 +17,11 @@ namespace ShaiyaOverlay
     Vector3 NavigationManager::Waypoints[64] = { 0 };
     U32 NavigationManager::WaypointCount = 0;
     U32 NavigationManager::CurrentWaypointIndex = 0;
+    Vector3 NavigationManager::PathStartPos = { 0 };
 
     Vector3 NavigationManager::LastStuckCheckPos = { 0 };
     U32 NavigationManager::LastStuckCheckTick = 0;
+    U32 NavigationManager::DetourLockTick = 0;
 
     static bool KeyIsDown = false;
 
@@ -94,8 +96,8 @@ namespace ShaiyaOverlay
 
         bool RightOk = (fabsf(RightStart.Y - Start.Y) <= 1.5f && fabsf(RightEnd.Y - End.Y) <= 1.5f && CheckLineOfSight(RightStart, RightEnd));
 
-        // Center must be clear; at least one side must be clear (allows passing through gates and walking along walls)
-        if (!LeftOk && !RightOk)
+        // BOTH shoulders must be clear to ensure character body width fits without scraping walls/corners
+        if (!LeftOk || !RightOk)
             return false;
 
         return true;
@@ -110,14 +112,19 @@ namespace ShaiyaOverlay
             return true;
 
         // Overall slope check: reject slopes steeper than 0.28 (~15.6 degrees uphill) or 0.40 (downhill)
-        F32 deltaY = End.Y - Start.Y;
+        F32 StartY = GetGroundHeight(Start.X, Start.Z);
+        if (StartY == 0.0f) StartY = Start.Y;
+        F32 EndY = GetGroundHeight(End.X, End.Z);
+        if (EndY == 0.0f) EndY = End.Y;
+
+        F32 deltaY = EndY - StartY;
         if (deltaY > 0.0f && (deltaY / Dist) > 0.28f)
             return false;
         if (deltaY < 0.0f && (-deltaY / Dist) > 0.40f)
             return false;
 
-        // Width clearance corridor check (0.35m radius = 0.70m corridor)
-        if (!CheckWalkableClearance(Start, End, 0.35f))
+        // Width clearance corridor check (0.45m radius = 0.90m clear corridor)
+        if (!CheckWalkableClearance(Start, End, 0.45f))
             return false;
 
         // Sample intermediate terrain elevation every 2.0 meters along the line
@@ -178,22 +185,21 @@ namespace ShaiyaOverlay
         if (!OutWaypoints || MaxWaypoints == 0)
             return 0;
 
-        const bool GoalInTown = (Goal.X < 425.0f && Goal.X > 220.0f && Goal.Z > 120.0f && Goal.Z < 260.0f && Goal.Y > 105.0f);
-        const bool StartInTown = (Start.X < 408.0f && Start.X > 220.0f && Start.Z > 120.0f && Start.Z < 260.0f && Start.Y > 105.0f);
+        // East Gate Corridor is ONLY needed when crossing between the Eastern Wilderness (X > 430, Y < 100)
+        // and the Keolloseu town plateau (X <= 430, Y > 105) to navigate the sheer eastern cliff.
+        const bool StartInEastWilderness = (Start.X > 430.0f && Start.Y < 100.0f);
+        const bool GoalInEastWilderness  = (Goal.X  > 430.0f && Goal.Y  < 100.0f);
+        const bool StartOnTownPlateau    = (Start.X <= 430.0f && Start.Y >= 104.0f);
+        const bool GoalOnTownPlateau     = (Goal.X  <= 430.0f && Goal.Y  >= 104.0f);
 
         const Vector3 GateOuter = { 424.0f, 107.14f, 141.0f };
         const Vector3 GateInner = { 405.0f, 107.30f, 141.0f };
 
-        // 1. Entering town from wilderness
-        if (GoalInTown && !StartInTown)
+        // 1. Entering town plateau from the Eastern Wilderness
+        if (StartInEastWilderness && GoalOnTownPlateau)
         {
-            U32 wp1 = 0;
-            if (Start.X > 425.0f || Start.Y < 100.0f)
-            {
-                wp1 = BuildPathAStar(Start, GateOuter, OutWaypoints, MaxWaypoints > 48 ? 48 : MaxWaypoints - 8);
-            }
-
-            if (wp1 < MaxWaypoints - 6)
+            U32 wp1 = BuildPathAStar(Start, GateOuter, OutWaypoints, MaxWaypoints > 48 ? 48 : MaxWaypoints - 8);
+            if (wp1 > 0 && wp1 < MaxWaypoints - 6)
             {
                 OutWaypoints[wp1++] = GateInner;
                 U32 remSlots = MaxWaypoints - wp1;
@@ -202,11 +208,11 @@ namespace ShaiyaOverlay
             }
         }
 
-        // 2. Exiting town to wilderness
-        if (!GoalInTown && StartInTown)
+        // 2. Exiting town plateau to the Eastern Wilderness
+        if (StartOnTownPlateau && GoalInEastWilderness)
         {
             U32 wp1 = BuildPathAStar(Start, GateInner, OutWaypoints, MaxWaypoints > 16 ? 16 : MaxWaypoints - 8);
-            if (wp1 < MaxWaypoints - 6)
+            if (wp1 > 0 && wp1 < MaxWaypoints - 6)
             {
                 OutWaypoints[wp1++] = GateOuter;
                 U32 remSlots = MaxWaypoints - wp1;
@@ -253,7 +259,7 @@ namespace ShaiyaOverlay
         const int GridDim = 112;
         F32 DesiredSpan = TotalDist + 50.0f;
         F32 CellSize = DesiredSpan / static_cast<F32>(GridDim - 4);
-        if (CellSize < 2.5f) CellSize = 2.5f;
+        if (CellSize < 0.75f) CellSize = 0.75f;
 
         Vector3 Center = { (AdjustedStart.X + AdjustedGoal.X) * 0.5f,
                            (AdjustedStart.Y + AdjustedGoal.Y) * 0.5f,
@@ -374,12 +380,12 @@ namespace ShaiyaOverlay
                 bestZ = cz;
             }
 
-            F32 curWX = GridToWorldX(cx);
-            F32 curWZ = GridToWorldZ(cz);
-            F32 curWY = GetGroundHeight(curWX, curWZ);
+            F32 curWX = (cx == startGX && cz == startGZ) ? AdjustedStart.X : GridToWorldX(cx);
+            F32 curWZ = (cx == startGX && cz == startGZ) ? AdjustedStart.Z : GridToWorldZ(cz);
+            F32 curWY = (cx == startGX && cz == startGZ) ? AdjustedStart.Y : GetGroundHeight(curWX, curWZ);
             Vector3 curPos = { curWX, curWY, curWZ };
 
-            if (IsGoalNode(cx, cz) || (h < 60.0f && IsSegmentWalkable(curPos, AdjustedGoal)))
+            if ((cx != startGX || cz != startGZ) && (IsGoalNode(cx, cz) || (h < 60.0f && IsSegmentWalkable(curPos, AdjustedGoal))))
             {
                 bestX = cx;
                 bestZ = cz;
@@ -423,9 +429,9 @@ namespace ShaiyaOverlay
                     }
                 }
 
-                // Width clearance corridor check (0.35m radius)
+                // Width clearance corridor check (0.45m radius)
                 Vector3 nPos = { nWX, nWY, nWZ };
-                if (!CheckWalkableClearance(curPos, nPos, 0.35f))
+                if (!CheckWalkableClearance(curPos, nPos, 0.45f))
                 {
                     continue;
                 }
@@ -584,6 +590,7 @@ namespace ShaiyaOverlay
 
         WaypointCount = BuildPath(StartPos, TargetPos, Waypoints, 64);
         CurrentWaypointIndex = 0;
+        PathStartPos = StartPos;
         LastStuckCheckPos = StartPos;
         LastStuckCheckTick = GetTickCount();
 
@@ -698,15 +705,7 @@ namespace ShaiyaOverlay
 
             if (MovedDist < 0.20f)
             {
-                bool isFinalWp = (WaypointCount > 0 && CurrentWaypointIndex >= WaypointCount - 1);
-                if (isFinalWp)
-                {
-                    Logger::Info("Navigation: Stopped at final waypoint area (moved %.2fm).", MovedDist);
-                    Stop();
-                    return;
-                }
-
-                Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s). Re-routing...", MovedDist);
+                Logger::Info("Navigation: Stuck/sliding detected (moved %.2fm in 2.5s, rem=%.1fm). Re-routing...", MovedDist, RemainingDistance);
 
                 // Release key briefly to stop momentum/sliding
                 if (Offsets.KeyBuffer)
@@ -722,6 +721,20 @@ namespace ShaiyaOverlay
 
                 WaypointCount = BuildPath(CurPos, TargetPos, Waypoints, 64);
                 CurrentWaypointIndex = 0;
+                PathStartPos = CurPos;
+                DetourLockTick = Now;
+
+                if (WaypointCount == 0)
+                {
+                    Logger::Info("Navigation: Re-route found no path. Stopping.");
+                    Stop();
+                    return;
+                }
+
+                // Give detour at least 4.0s before another stuck check can trigger
+                LastStuckCheckPos = CurPos;
+                LastStuckCheckTick = Now + 1500;
+                return;
             }
 
             LastStuckCheckPos = CurPos;
@@ -753,13 +766,38 @@ namespace ShaiyaOverlay
         }
         else
         {
-            // Advance to next waypoint if within 2.2m or if player has passed the waypoint plane
-            Vector3 PrevPt = (CurrentWaypointIndex == 0) ? CurPos : Waypoints[CurrentWaypointIndex - 1];
+            // Advance to next waypoint if physically passed, very close, or within corridor with clear line of sight
+            Vector3 PrevPt = (CurrentWaypointIndex == 0) ? PathStartPos : Waypoints[CurrentWaypointIndex - 1];
             F32 SegX = CurrentTarget.X - PrevPt.X;
             F32 SegZ = CurrentTarget.Z - PrevPt.Z;
             F32 DotPast = (CurPos.X - CurrentTarget.X) * SegX + (CurPos.Z - CurrentTarget.Z) * SegZ;
 
-            if (DistToWaypoint <= 2.2f || (DistToWaypoint <= 4.0f && DotPast > 0.0f))
+            Vector3 NextWp = Waypoints[CurrentWaypointIndex + 1];
+            bool hasLosToNext = CheckLineOfSight(CurPos, NextWp);
+
+            // During detour lock (first 3.0s after stuck recovery), do not cut corners early!
+            bool isDetourLocked = (Now - DetourLockTick < 3000);
+
+            bool canAdvance = false;
+            if (!isDetourLocked && hasLosToNext)
+            {
+                // Next waypoint is unobstructed: can smoothly round or cut the corner
+                if (DistToWaypoint <= 1.8f || (DotPast > 0.0f && DistToWaypoint <= 3.5f))
+                {
+                    canAdvance = true;
+                }
+            }
+            else
+            {
+                // Next waypoint is BLOCKED by a wall/corner OR in active detour recovery:
+                // MUST clear the waypoint plane (DotPast > 0) OR reach within 0.35m!
+                if (DotPast > 0.0f || DistToWaypoint <= 0.35f)
+                {
+                    canAdvance = true;
+                }
+            }
+
+            if (canAdvance)
             {
                 CurrentWaypointIndex++;
                 if (CurrentWaypointIndex >= WaypointCount)
@@ -795,14 +833,14 @@ namespace ShaiyaOverlay
             F32 EyeX = LookX - CamDist * DirX;
             F32 EyeZ = LookZ - CamDist * DirZ;
 
-            // Primary CameraEye at 0x1407F8520
+            // Primary CameraEye
             *reinterpret_cast<F32*>(Offsets.CameraEye) = EyeX;
             *reinterpret_cast<F32*>(Offsets.CameraEye + 8) = EyeZ;
 
-            // Secondary CameraEye at ImageBase + 0x9DF010
-            U64 CamEye2 = (Offsets.CameraEye - 0x7F8520) + 0x9DF010;
-            if (CamEye2)
+            // Secondary CameraEye (immediately follows ProjMatrix 4x4)
+            if (Offsets.ProjMatrix)
             {
+                U64 CamEye2 = Offsets.ProjMatrix + 0x40;
                 *reinterpret_cast<F32*>(CamEye2) = EyeX;
                 *reinterpret_cast<F32*>(CamEye2 + 8) = EyeZ;
             }

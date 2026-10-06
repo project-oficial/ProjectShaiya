@@ -206,6 +206,86 @@ def use_quickslot(slot: int) -> Dict[str, Any]:
     return res
 
 
+def pickup_item(world_id: int) -> Dict[str, Any]:
+    """Picks up a dropped ground item by its World ID using native SendPickUp."""
+    res = send_pipe_command({"cmd": "pickup_item", "world_id": int(world_id)})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def set_autoloot(enabled: Optional[bool] = None, only_my_drops: Optional[bool] = None,
+                 auto_walk: Optional[bool] = None, radius: Optional[float] = None) -> Dict[str, Any]:
+    """Configures the automatic loot pickup system."""
+    payload: Dict[str, Any] = {"cmd": "set_autoloot"}
+    if enabled is not None:
+        payload["enabled"] = bool(enabled)
+    if only_my_drops is not None:
+        payload["only_my_drops"] = bool(only_my_drops)
+    if auto_walk is not None:
+        payload["auto_walk"] = bool(auto_walk)
+    if radius is not None:
+        payload["radius"] = float(radius)
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def set_autobuff(enabled: Optional[bool] = None, skill_id: Optional[int] = None,
+                 active: Optional[bool] = None, recast_seconds: Optional[int] = None) -> Dict[str, Any]:
+    """Configures automatic buff recast for specified skills."""
+    payload: Dict[str, Any] = {"cmd": "set_autobuff"}
+    if enabled is not None:
+        payload["enabled"] = bool(enabled)
+    if skill_id is not None:
+        payload["skill_id"] = int(skill_id)
+    if active is not None:
+        payload["active"] = bool(active)
+    if recast_seconds is not None:
+        payload["recast_seconds"] = int(recast_seconds)
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def query_combo() -> Dict[str, Any]:
+    """Retrieves auto-combo configuration, active state, and skill sequence."""
+    res = send_pipe_command({"cmd": "get_combo"})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def set_autocombo(enabled: Optional[bool] = None, active: Optional[bool] = None,
+                  hold_mode: Optional[bool] = None, delay_ms: Optional[int] = None,
+                  add_skill_id: Optional[int] = None, clear: Optional[bool] = None) -> Dict[str, Any]:
+    """Configures the auto-combo rotation sequence, timing, and execution state."""
+    payload: Dict[str, Any] = {"cmd": "set_autocombo"}
+    if enabled is not None:
+        payload["enabled"] = bool(enabled)
+    if active is not None:
+        payload["active"] = bool(active)
+    if hold_mode is not None:
+        payload["hold_mode"] = bool(hold_mode)
+    if delay_ms is not None:
+        payload["delay_ms"] = int(delay_ms)
+    if add_skill_id is not None:
+        payload["add_skill_id"] = int(add_skill_id)
+    if clear is not None:
+        payload["clear"] = bool(clear)
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
 def query_inventory() -> Dict[str, Any]:
     """Retrieves all player inventory items with bag, slot, count, name, and consumable status."""
     res = send_pipe_command({"cmd": "get_inventory"})

@@ -16,6 +16,8 @@ namespace ShaiyaOverlay
         static bool ResolveSkillDetails(U16 SkillId, U16 Level, char* OutName, U32 MaxLen, bool* OutPassive = nullptr, U8* OutTargetType = nullptr, U16* OutBaseCooldownSec = nullptr);
         static bool CastSkill(U8 LearnedSlot, U8 TargetType = 3, U32 ExplicitTargetId = 0);
         static U32 GetSelectedTargetWorldId();
+        static bool HasAliveTarget();
+        static void SetTarget(U32 TargetWorldId);
         static U32 GetGameTimeMs();
 
     private:

@@ -368,7 +368,9 @@ namespace ShaiyaOverlay
             Logger::Error("  SelectSlotAddr  : FAILED (AOB not found)");
 
         // 31. GetItemRecordAddr (CItemDb_GetItemRecord)
-        Offsets.GetItemRecordAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 45 33 D2 45 8B D8 0F B6 C2 48 8B D9 80 FA 1E 75");
+        Offsets.GetItemRecordAddr = PatternScanner::ScanModule(nullptr, "48 83 EC 08 45 33 D2 48 89 5C 24 10 45 8B C8 44 0F B6 C2 48 8B D9 80 FA 1E 75");
+        if (!Offsets.GetItemRecordAddr)
+            Offsets.GetItemRecordAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 45 33 D2 45 8B D8 0F B6 C2 48 8B D9 80 FA 1E 75");
         if (Offsets.GetItemRecordAddr)
             Logger::Info("  GetItemRecord   : 0x%llX", Offsets.GetItemRecordAddr);
         else
@@ -396,6 +398,28 @@ namespace ShaiyaOverlay
             Logger::Info("  GetSkillRecord  : 0x%llX", Offsets.GetSkillRecordAddr);
         else
             Logger::Error("  GetSkillRecord  : FAILED (AOB not found)");
+
+        // 35. SendPickUp (sub_140387160 / sub_140385430)
+        Offsets.SendPickUpAddr = PatternScanner::ScanModule(nullptr, "B8 28 10 00 00 E8 ? ? ? ? 48 2B E0 B8 05 02 00 00");
+        if (Offsets.SendPickUpAddr)
+            Logger::Info("  SendPickUp      : 0x%llX", Offsets.SendPickUpAddr);
+        else
+            Logger::Error("  SendPickUp      : FAILED (AOB not found)");
+
+        // 36. SendCharBuffPacket (sub_140387910 / sub_140385be0)
+        Offsets.SendCharBuffPacketAddr = PatternScanner::ScanModule(nullptr, "48 89 5C 24 10 57 B8 20 10 00 00 E8 ? ? ? ? 48 2B E0 0F B6 D9");
+        if (Offsets.SendCharBuffPacketAddr)
+            Logger::Info("  SendCharBuff    : 0x%llX", Offsets.SendCharBuffPacketAddr);
+        else
+            Logger::Error("  SendCharBuff    : FAILED (AOB not found)");
+
+        // 37. TargetType (dword_140A11F1C)
+        U64 MatchTargetType = PatternScanner::ScanModule(nullptr, "89 15 ? ? ? ? 44 89 80 44 03 00 00");
+        Offsets.TargetTypeAddr = MatchTargetType ? PatternScanner::RipRelative(MatchTargetType, 2, 6) : 0;
+        if (Offsets.TargetTypeAddr)
+            Logger::Info("  TargetTypeAddr  : 0x%llX", Offsets.TargetTypeAddr);
+        else
+            Logger::Error("  TargetTypeAddr  : FAILED (AOB not found)");
 
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
@@ -432,7 +456,10 @@ namespace ShaiyaOverlay
                        Offsets.GetItemRecordAddr &&
                        Offsets.QuestMobSet &&
                        Offsets.MainUIPtr &&
-                       Offsets.GetSkillRecordAddr;
+                       Offsets.GetSkillRecordAddr &&
+                       Offsets.SendPickUpAddr &&
+                       Offsets.SendCharBuffPacketAddr &&
+                       Offsets.TargetTypeAddr;
 
         if (!Success)
             Logger::Error("GameOffsets: One or more AOB patterns FAILED to resolve!");
