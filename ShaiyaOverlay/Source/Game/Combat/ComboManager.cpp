@@ -42,6 +42,15 @@ namespace ShaiyaOverlay
         Config.HoldKeyMode = (GetPrivateProfileIntA("AutoCombo", "HoldKeyMode", 0, IniPath) != 0);
         Config.CastDelayMs = static_cast<U32>(GetPrivateProfileIntA("AutoCombo", "CastDelayMs", 1100, IniPath));
 
+        Config.AutoTargetNext = (GetPrivateProfileIntA("AutoCombo", "AutoTargetNext", 0, IniPath) != 0);
+        Config.TargetFilter = static_cast<TargetFilterMode>(GetPrivateProfileIntA("AutoCombo", "TargetFilter", 0, IniPath));
+
+        char BufRange[32] = { 0 };
+        GetPrivateProfileStringA("AutoCombo", "MaxTargetRange", "25.0", BufRange, sizeof(BufRange), IniPath);
+        float r = static_cast<float>(atof(BufRange));
+        if (r >= 5.0f && r <= 50.0f)
+            Config.MaxTargetRange = r;
+
         char SectionBuffer[4096] = { 0 };
         DWORD BytesRead = GetPrivateProfileSectionA("Sequence", SectionBuffer, sizeof(SectionBuffer), IniPath);
         if (BytesRead == 0)
@@ -79,6 +88,16 @@ namespace ShaiyaOverlay
 
         StringUtils::Format(szVal, sizeof(szVal), "%u", Config.CastDelayMs);
         WritePrivateProfileStringA("AutoCombo", "CastDelayMs", szVal, IniPath);
+
+        WritePrivateProfileStringA("AutoCombo", "AutoTargetNext", Config.AutoTargetNext ? "1" : "0", IniPath);
+
+        char szFilter[16];
+        StringUtils::Format(szFilter, sizeof(szFilter), "%u", static_cast<U8>(Config.TargetFilter));
+        WritePrivateProfileStringA("AutoCombo", "TargetFilter", szFilter, IniPath);
+
+        char szRange[32];
+        StringUtils::Format(szRange, sizeof(szRange), "%.1f", Config.MaxTargetRange);
+        WritePrivateProfileStringA("AutoCombo", "MaxTargetRange", szRange, IniPath);
 
         WritePrivateProfileSectionA("Sequence", "", IniPath);
         for (U32 i = 0; i < Sequence.GetCount(); ++i)
@@ -194,6 +213,31 @@ namespace ShaiyaOverlay
         }
     }
 
+    U32 ComboManager::FindNextMonsterTarget()
+    {
+        const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
+        F32 BestDist = Config.MaxTargetRange;
+        U32 BestWorldId = 0;
+
+        for (U32 i = 0; i < Mobs.GetCount(); ++i)
+        {
+            const MonsterEntity& Mob = Mobs[i];
+            if (!Mob.Alive || Mob.CurrentHp == 0)
+                continue;
+
+            // Filter: Quest only if configured
+            if (Config.TargetFilter == TargetFilterMode::QuestMonstersOnly && !Mob.IsQuestTarget)
+                continue;
+
+            if (Mob.Distance <= BestDist)
+            {
+                BestDist = Mob.Distance;
+                BestWorldId = Mob.WorldId;
+            }
+        }
+        return BestWorldId;
+    }
+
     bool ComboManager::ExecuteNextSkill()
     {
         if (Sequence.GetCount() == 0)
@@ -229,10 +273,30 @@ namespace ShaiyaOverlay
                     {
                         const bool IsBuff = (Skill.TargetType == 0 || Skill.TargetType == 8);
 
-                        // If offensive skill, verify an alive monster target is currently selected!
-                        if (!IsBuff && !SkillManager::HasAliveTarget())
+                        // If offensive skill, verify or acquire an alive monster target
+                        if (!IsBuff)
                         {
-                            return false;
+                            if (!SkillManager::HasAliveTarget())
+                            {
+                                if (Config.AutoTargetNext)
+                                {
+                                    U32 NextMobId = FindNextMonsterTarget();
+                                    if (NextMobId != 0)
+                                    {
+                                        SkillManager::SetTarget(NextMobId);
+                                        Logger::Info("AutoCombo: Auto-targeted next mob (WorldId: %u)", NextMobId);
+                                    }
+                                    else
+                                    {
+                                        return false; // No valid alive mob in range matching filter
+                                    }
+                                }
+                                else
+                                {
+                                    // Standalone mode: wait for manual target
+                                    return false;
+                                }
+                            }
                         }
 
                         // Check if ready to cast (not on cooldown)

@@ -264,8 +264,10 @@ def query_combo() -> Dict[str, Any]:
 
 def set_autocombo(enabled: Optional[bool] = None, active: Optional[bool] = None,
                   hold_mode: Optional[bool] = None, delay_ms: Optional[int] = None,
+                  auto_target: Optional[bool] = None, target_filter: Optional[int] = None,
+                  max_target_range: Optional[float] = None,
                   add_skill_id: Optional[int] = None, clear: Optional[bool] = None) -> Dict[str, Any]:
-    """Configures the auto-combo rotation sequence, timing, and execution state."""
+    """Configures the auto-combo rotation sequence, timing, target acquisition, and execution state."""
     payload: Dict[str, Any] = {"cmd": "set_autocombo"}
     if enabled is not None:
         payload["enabled"] = bool(enabled)
@@ -275,6 +277,12 @@ def set_autocombo(enabled: Optional[bool] = None, active: Optional[bool] = None,
         payload["hold_mode"] = bool(hold_mode)
     if delay_ms is not None:
         payload["delay_ms"] = int(delay_ms)
+    if auto_target is not None:
+        payload["auto_target"] = bool(auto_target)
+    if target_filter is not None:
+        payload["target_filter"] = int(target_filter)
+    if max_target_range is not None:
+        payload["max_target_range"] = float(max_target_range)
     if add_skill_id is not None:
         payload["add_skill_id"] = int(add_skill_id)
     if clear is not None:

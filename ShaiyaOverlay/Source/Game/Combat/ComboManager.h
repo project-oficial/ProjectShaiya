@@ -5,6 +5,12 @@
 
 namespace ShaiyaOverlay
 {
+    enum class TargetFilterMode : U8
+    {
+        AllMonsters = 0,
+        QuestMonstersOnly = 1
+    };
+
     struct ComboEntry
     {
         U16 SkillId;
@@ -18,6 +24,11 @@ namespace ShaiyaOverlay
         bool HoldKeyMode = false;
         U32 Hotkey = 'C';
         U32 CastDelayMs = 1100;
+
+        // Auto-Attack / Next Target switching
+        bool AutoTargetNext = false;
+        TargetFilterMode TargetFilter = TargetFilterMode::AllMonsters;
+        F32 MaxTargetRange = 25.0f;
     };
 
     class ComboManager
@@ -41,6 +52,7 @@ namespace ShaiyaOverlay
         static ComboConfig& GetConfig() { return Config; }
 
         static void HandleHotkeyState(bool KeyDown);
+        static U32 FindNextMonsterTarget();
 
     private:
         static void LoadConfig();

@@ -698,12 +698,15 @@ namespace ShaiyaOverlay
             const auto& seq = ComboManager::GetComboSequence();
 
             int written = sprintf_s(pResponse, nMaxLen,
-                "{\"status\":\"ok\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"hotkey\":%u,\"delay_ms\":%u,\"sequence\":[",
+                "{\"status\":\"ok\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"hotkey\":%u,\"delay_ms\":%u,\"auto_target\":%s,\"target_filter\":%u,\"max_target_range\":%.1f,\"sequence\":[",
                 cfg.Enabled ? "true" : "false",
                 cfg.Active ? "true" : "false",
                 cfg.HoldKeyMode ? "true" : "false",
                 cfg.Hotkey,
-                cfg.CastDelayMs);
+                cfg.CastDelayMs,
+                cfg.AutoTargetNext ? "true" : "false",
+                static_cast<U8>(cfg.TargetFilter),
+                cfg.MaxTargetRange);
 
             if (written <= 0) return;
             size_t offset = static_cast<size_t>(written);
@@ -737,6 +740,18 @@ namespace ShaiyaOverlay
             if (extract_json_bool(pRequest, "hold_mode", holdVal))
                 cfg.HoldKeyMode = holdVal;
 
+            bool autoTarget = cfg.AutoTargetNext;
+            if (extract_json_bool(pRequest, "auto_target", autoTarget))
+                cfg.AutoTargetNext = autoTarget;
+
+            double filterVal = static_cast<double>(static_cast<U8>(cfg.TargetFilter));
+            if (extract_json_double(pRequest, "target_filter", filterVal))
+                cfg.TargetFilter = static_cast<TargetFilterMode>(static_cast<U8>(filterVal));
+
+            double rangeVal = static_cast<double>(cfg.MaxTargetRange);
+            if (extract_json_double(pRequest, "max_target_range", rangeVal) && rangeVal >= 5.0)
+                cfg.MaxTargetRange = static_cast<float>(rangeVal);
+
             double delayVal = static_cast<double>(cfg.CastDelayMs);
             if (extract_json_double(pRequest, "delay_ms", delayVal) && delayVal >= 400.0)
                 cfg.CastDelayMs = static_cast<U32>(delayVal);
@@ -754,11 +769,14 @@ namespace ShaiyaOverlay
             }
 
             sprintf_s(pResponse, nMaxLen,
-                "{\"status\":\"ok\",\"action\":\"set_autocombo\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"delay_ms\":%u}",
+                "{\"status\":\"ok\",\"action\":\"set_autocombo\",\"enabled\":%s,\"active\":%s,\"hold_mode\":%s,\"delay_ms\":%u,\"auto_target\":%s,\"target_filter\":%u,\"max_target_range\":%.1f}",
                 cfg.Enabled ? "true" : "false",
                 cfg.Active ? "true" : "false",
                 cfg.HoldKeyMode ? "true" : "false",
-                cfg.CastDelayMs);
+                cfg.CastDelayMs,
+                cfg.AutoTargetNext ? "true" : "false",
+                static_cast<U8>(cfg.TargetFilter),
+                cfg.MaxTargetRange);
         }
 
         static void HandleCheckCollision(const char* pRequest, char* pResponse, size_t nMaxLen)

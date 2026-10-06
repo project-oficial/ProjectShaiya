@@ -1033,6 +1033,26 @@ namespace ShaiyaOverlay
                 ImGui::SetTooltip("Marcado: combe enquanto segurar a tecla 'C'.\nDesmarcado: aperte 'C' para ligar/desligar.");
             }
 
+            ImGui::Checkbox("Auto-Target Próximo Mob", &Cfg.AutoTargetNext);
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Marcado: após matar o monstro, seleciona e ataca automaticamente o próximo.\nDesmarcado (standalone): ataca apenas o alvo selecionado manualmente.");
+            }
+
+            if (Cfg.AutoTargetNext)
+            {
+                ImGui::SameLine();
+                int filterMode = static_cast<int>(Cfg.TargetFilter);
+                ImGui::RadioButton("Todos os Mobs", &filterMode, 0);
+                ImGui::SameLine();
+                ImGui::RadioButton("Apenas Mobs de Quest", &filterMode, 1);
+                Cfg.TargetFilter = static_cast<TargetFilterMode>(filterMode);
+
+                ImGui::SetNextItemWidth(100.0f);
+                ImGui::SliderFloat("Raio de Busca", &Cfg.MaxTargetRange, 10.0f, 45.0f, "%.0fm");
+                ImGui::SameLine();
+            }
+
             ImGui::SetNextItemWidth(90.0f);
             int delayMs = static_cast<int>(Cfg.CastDelayMs);
             if (ImGui::SliderInt("Delay (ms)", &delayMs, 600, 2500))
