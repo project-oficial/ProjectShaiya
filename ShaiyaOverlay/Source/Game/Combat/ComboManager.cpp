@@ -129,6 +129,7 @@ namespace ShaiyaOverlay
                 StringUtils::Format(Entry.Name, sizeof(Entry.Name), "Skill #%u", SkillId);
             }
         }
+        StringUtils::NormalizeAccents(Entry.Name, sizeof(Entry.Name), false);
 
         Sequence.Add(Entry);
         SaveConfig();
@@ -271,7 +272,7 @@ namespace ShaiyaOverlay
                 {
                     if (Skill.IsLearned && !Skill.IsPassive && Skill.LearnedSlot != 0xFF)
                     {
-                        const bool IsBuff = (Skill.TargetType == 0 || Skill.TargetType == 8);
+                        const bool IsBuff = (Skill.TargetType == 0 || Skill.TargetType == 2 || Skill.TargetType == 8);
 
                         // If offensive skill, verify or acquire an alive monster target
                         if (!IsBuff)
@@ -324,6 +325,35 @@ namespace ShaiyaOverlay
     {
         if (!ConfigLoaded)
             LoadConfig();
+
+        // Dynamically resolve skill names if they were loaded before game world was ready
+        for (U32 i = 0; i < Sequence.GetCount(); ++i)
+        {
+            if (Sequence[i].Name[0] == '\0' || strncmp(Sequence[i].Name, "Skill #", 7) == 0)
+            {
+                const auto& learned = SkillManager::GetSkills();
+                bool foundLearned = false;
+                for (U32 s = 0; s < learned.GetCount(); ++s)
+                {
+                    if (learned[s].SkillId == Sequence[i].SkillId && learned[s].Name[0] != '\0')
+                    {
+                        StringUtils::Copy(Sequence[i].Name, learned[s].Name, sizeof(Sequence[i].Name));
+                        foundLearned = true;
+                        break;
+                    }
+                }
+
+                if (!foundLearned)
+                {
+                    char realName[64] = { 0 };
+                    if (SkillManager::ResolveSkillName(Sequence[i].SkillId, 1, realName, sizeof(realName)))
+                    {
+                        StringUtils::Copy(Sequence[i].Name, realName, sizeof(Sequence[i].Name));
+                    }
+                }
+                StringUtils::NormalizeAccents(Sequence[i].Name, sizeof(Sequence[i].Name), false);
+            }
+        }
 
         if (!Config.Enabled)
         {

@@ -157,4 +157,136 @@ namespace ShaiyaOverlay
             Copy(Utf8Str, AnsiStr, MaxLen);
         }
     }
+
+    static unsigned char SimplifyDoubleChar(unsigned char c1, unsigned char c2, bool bChangeToLowerCase)
+    {
+        if (c1 == 0xC2)
+        {
+            if (c2 == 0xAA) return 'a';
+            if (c2 == 0xBA) return 'o';
+            if (c2 == 0xA9) return 'c';
+            if (c2 == 0xAE) return 'r';
+        }
+
+        if (c1 == 0xC3)
+        {
+            if (c2 >= 0x80 && c2 <= 0x85) return bChangeToLowerCase ? 'a' : 'A';
+            if (c2 >= 0xA0 && c2 <= 0xA5) return 'a';
+            if (c2 >= 0x88 && c2 <= 0x8B) return bChangeToLowerCase ? 'e' : 'E';
+            if (c2 >= 0xA8 && c2 <= 0xAB) return 'e';
+            if (c2 >= 0x8C && c2 <= 0x8F) return bChangeToLowerCase ? 'i' : 'I';
+            if (c2 >= 0xAC && c2 <= 0xAF) return 'i';
+            if (c2 >= 0x92 && c2 <= 0x96) return bChangeToLowerCase ? 'o' : 'O';
+            if (c2 >= 0xB2 && c2 <= 0xB6) return 'o';
+            if (c2 >= 0x99 && c2 <= 0x9C) return bChangeToLowerCase ? 'u' : 'U';
+            if (c2 >= 0xB9 && c2 <= 0xBC) return 'u';
+            if (c2 == 0x87) return bChangeToLowerCase ? 'c' : 'C';
+            if (c2 == 0xA7) return 'c';
+            if (c2 == 0x91) return bChangeToLowerCase ? 'n' : 'N';
+            if (c2 == 0xB1) return 'n';
+            if (c2 == 0x9F) return 's';
+            if (c2 == 0x9D) return bChangeToLowerCase ? 'y' : 'Y';
+            if (c2 == 0xBD || c2 == 0xBF) return 'y';
+        }
+
+        if (c1 == 0xC5)
+        {
+            if (c2 == 0xBD) return bChangeToLowerCase ? 'z' : 'Z';
+            if (c2 == 0xBE) return 'z';
+            if (c2 == 0xB8) return bChangeToLowerCase ? 'y' : 'Y';
+        }
+
+        return c1;
+    }
+
+    static unsigned char SimplifySingleChar(unsigned char c, bool bChangeToLowerCase)
+    {
+        if ((c >= 0xC0 && c <= 0xC5) || (c >= 0xE0 && c <= 0xE5) || c == 0xAA)
+            return (c >= 0xE0 || bChangeToLowerCase) ? 'a' : 'A';
+
+        if ((c >= 0xC8 && c <= 0xCB) || (c >= 0xE8 && c <= 0xEB))
+            return (c >= 0xE8 || bChangeToLowerCase) ? 'e' : 'E';
+
+        if ((c >= 0xCC && c <= 0xCF) || (c >= 0xEC && c <= 0xEF))
+            return (c >= 0xEC || bChangeToLowerCase) ? 'i' : 'I';
+
+        if ((c >= 0xD2 && c <= 0xD6) || (c >= 0xF2 && c <= 0xF6) || c == 0xBA)
+            return (c >= 0xF2 || bChangeToLowerCase) ? 'o' : 'O';
+
+        if ((c >= 0xD9 && c <= 0xDC) || (c >= 0xF9 && c <= 0xFC))
+            return (c >= 0xF9 || bChangeToLowerCase) ? 'u' : 'U';
+
+        if (c == 0xA9 || c == 0xC7 || c == 0xE7)
+            return (c == 0xE7 || bChangeToLowerCase) ? 'c' : 'C';
+
+        if (c == 0xD1 || c == 0xF1)
+            return (c == 0xF1 || bChangeToLowerCase) ? 'n' : 'N';
+
+        if (c == 0xAE)
+            return 'r';
+
+        if (c == 0xDF)
+            return 's';
+
+        if (c == 0x8E || c == 0x9E)
+            return (c == 0x9E || bChangeToLowerCase) ? 'z' : 'Z';
+
+        if (c == 0x9F || c == 0xDD || c == 0xFD || c == 0xFF)
+            return (c == 0xFD || c == 0xFF || bChangeToLowerCase) ? 'y' : 'Y';
+
+        return c;
+    }
+
+    void StringUtils::NormalizeAccents(char* Str, U32 MaxLen, bool ChangeToLowerCase)
+    {
+        if (!Str || Str[0] == '\0') return;
+
+        U32 StrLen = Length(Str);
+        U32 Limit = (MaxLen > 0 && MaxLen - 1 < StrLen) ? MaxLen - 1 : StrLen;
+
+        U32 InIdx = 0;
+        U32 OutIdx = 0;
+
+        while (InIdx < Limit && Str[InIdx] != '\0')
+        {
+            unsigned char c = static_cast<unsigned char>(Str[InIdx]);
+            if (c >= 0x80)
+            {
+                // Check if this is a UTF-8 2-byte leading character (0xC2, 0xC3, 0xC5)
+                if ((c == 0xC2 || c == 0xC3 || c == 0xC5) && (InIdx + 1 < Limit) && (static_cast<unsigned char>(Str[InIdx + 1]) >= 0x80))
+                {
+                    unsigned char c2 = SimplifyDoubleChar(c, static_cast<unsigned char>(Str[InIdx + 1]), ChangeToLowerCase);
+                    if (c2 < 0x80)
+                    {
+                        Str[OutIdx++] = static_cast<char>(c2);
+                        InIdx += 2;
+                        continue;
+                    }
+                    else
+                    {
+                        InIdx += 2;
+                        continue;
+                    }
+                }
+
+                // Single-byte ANSI / ISO-8859-1 / Windows-1252 character
+                unsigned char c2 = SimplifySingleChar(c, ChangeToLowerCase);
+                if (c2 < 0x80)
+                {
+                    Str[OutIdx++] = static_cast<char>(c2);
+                }
+                ++InIdx;
+            }
+            else
+            {
+                if (ChangeToLowerCase && c >= 'A' && c <= 'Z')
+                    Str[OutIdx++] = static_cast<char>(c + ('a' - 'A'));
+                else
+                    Str[OutIdx++] = static_cast<char>(c);
+                ++InIdx;
+            }
+        }
+
+        Str[OutIdx] = '\0';
+    }
 }

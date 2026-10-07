@@ -35,15 +35,15 @@ namespace ShaiyaOverlay
         U64 SkillVecLast = 0;
         if (Offsets.SkillVector)
         {
-            Memory::ReadSafe(Offsets.SkillVector + 8, &SkillVecFirst);
-            Memory::ReadSafe(Offsets.SkillVector + 16, &SkillVecLast);
+            Memory::ReadSafe(Offsets.SkillVector + 0x08, &SkillVecFirst);
+            Memory::ReadSafe(Offsets.SkillVector + 0x10, &SkillVecLast);
         }
 
         constexpr U32 TotalSlotsToRead = 30; // 3 bars of 10 slots each
 
         for (U32 I = 0; I < TotalSlotsToRead; ++I)
         {
-            U64 EntryAddr = Offsets.QuickSlotBase + I * 20;
+            U64 EntryAddr = Offsets.QuickSlotBase + I * 0x14;
 
             QuickSlotEntry Entry = { 0 };
             Entry.BarIndex = I / 10;
@@ -51,9 +51,9 @@ namespace ShaiyaOverlay
 
             U32 ActiveFlag = 0;
             Memory::ReadSafe(EntryAddr, &Entry.RawType);
-            Memory::ReadSafe(EntryAddr + 1, &Entry.SubType);
-            Memory::ReadSafe(EntryAddr + 2, &Entry.TargetId);
-            Memory::ReadSafe(EntryAddr + 4, &ActiveFlag);
+            Memory::ReadSafe(EntryAddr + 0x01, &Entry.SubType);
+            Memory::ReadSafe(EntryAddr + 0x02, &Entry.TargetId);
+            Memory::ReadSafe(EntryAddr + 0x04, &ActiveFlag);
 
             Entry.Active = (ActiveFlag != 0);
 
@@ -81,10 +81,10 @@ namespace ShaiyaOverlay
                         U64 SkillDataPtr = 0;
                         if (Memory::ReadSafe(SkillVecFirst + Entry.TargetId * sizeof(U64), &SkillDataPtr) && SkillDataPtr)
                         {
-                            Memory::ReadSafe(SkillDataPtr + 2, &SkillId);
-                            Memory::ReadSafe(SkillDataPtr + 4, &SkillLvl);
-                            Memory::ReadSafe(SkillDataPtr + 8, &SkillDuration);
-                            Memory::ReadSafe(SkillDataPtr + 12, &SkillStartTick);
+                            Memory::ReadSafe(SkillDataPtr + 0x02, &SkillId);
+                            Memory::ReadSafe(SkillDataPtr + 0x04, &SkillLvl);
+                            Memory::ReadSafe(SkillDataPtr + 0x08, &SkillDuration);
+                            Memory::ReadSafe(SkillDataPtr + 0x0C, &SkillStartTick);
                             SkillFound = true;
                         }
                     }

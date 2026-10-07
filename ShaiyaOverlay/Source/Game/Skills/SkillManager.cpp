@@ -39,21 +39,24 @@ namespace ShaiyaOverlay
                 if (RecPtr)
                 {
                     U64 NamePtr = 0;
-                    if (Memory::ReadSafe(RecPtr + 8, &NamePtr) && NamePtr)
+                    if (Memory::ReadSafe(RecPtr + 0x08, &NamePtr) && NamePtr)
                     {
                         char Temp[64] = { 0 };
                         if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
-                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                        {
+                            StringUtils::Copy(OutName, Temp, MaxLen);
+                            StringUtils::NormalizeAccents(OutName, MaxLen, false);
+                        }
                     }
 
                     U8 Cat = 0;
                     U8 TType = 0;
                     U16 BaseCd = 0;
-                    Memory::ReadSafe(RecPtr + 50, &Cat);
-                    Memory::ReadSafe(RecPtr + 0x4C, &TType);
-                    Memory::ReadSafe(RecPtr + 88, &BaseCd);
+                    Memory::ReadSafe(RecPtr + Offsets.SkillRecordCategory, &Cat);
+                    Memory::ReadSafe(RecPtr + Offsets.SkillRecordTargetType, &TType);
+                    Memory::ReadSafe(RecPtr + Offsets.SkillRecordBaseCooldown, &BaseCd);
 
-                    if (OutPassive) *OutPassive = (Cat == 10);
+                    if (OutPassive) *OutPassive = (TType == 0 || Cat == 10);
                     if (OutTargetType) *OutTargetType = TType;
                     if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
 
@@ -66,7 +69,7 @@ namespace ShaiyaOverlay
             }
         }
 
-        U64 SkillMapBase = Offsets.ItemDb + 0x88;
+        U64 SkillMapBase = Offsets.ItemDb + Offsets.ItemDbSkillMapBaseOffset;
         U64 NilNode = 0;
         U64 BucketsPtr = 0;
         U64 Mask = 0;
@@ -84,15 +87,15 @@ namespace ShaiyaOverlay
 
         U64 FirstInBucket = 0;
         U64 BucketEntry = 0;
-        if (!Memory::ReadSafe(BucketsPtr + Bucket * 16, &FirstInBucket)) return false;
-        if (!Memory::ReadSafe(BucketsPtr + Bucket * 16 + 8, &BucketEntry)) return false;
+        if (!Memory::ReadSafe(BucketsPtr + Bucket * 0x10, &FirstInBucket)) return false;
+        if (!Memory::ReadSafe(BucketsPtr + Bucket * 0x10 + 0x08, &BucketEntry)) return false;
 
         U64 Node = BucketEntry;
         U32 Walk = 0;
         while (Node && Node != NilNode && Walk < 64)
         {
             U32 Key = 0;
-            Memory::ReadSafe(Node + 16, &Key);
+            Memory::ReadSafe(Node + 0x10, &Key);
             if (Key == SkillId)
             {
                 U64 InnerNil = 0;
@@ -100,7 +103,7 @@ namespace ShaiyaOverlay
                 U64 InnerMask = 0;
                 Memory::ReadSafe(Node + 0x20, &InnerNil);
                 Memory::ReadSafe(Node + 0x30, &InnerBuckets);
-                Memory::ReadSafe(Node + 0x48, &InnerMask);
+                Memory::ReadSafe(Node + Offsets.SkillInnerMaskOffset, &InnerMask);
 
                 // Try matching exact Level first
                 if (InnerBuckets && InnerMask > 0)
@@ -111,8 +114,8 @@ namespace ShaiyaOverlay
 
                     U64 LvlFirst = 0;
                     U64 LvlEntry = 0;
-                    if (Memory::ReadSafe(InnerBuckets + LvlBucket * 16, &LvlFirst) &&
-                        Memory::ReadSafe(InnerBuckets + LvlBucket * 16 + 8, &LvlEntry))
+                    if (Memory::ReadSafe(InnerBuckets + LvlBucket * 0x10, &LvlFirst) &&
+                        Memory::ReadSafe(InnerBuckets + LvlBucket * 0x10 + 0x08, &LvlEntry))
                     {
                         U64 LNode = LvlEntry;
                         U32 LWalk = 0;
@@ -131,9 +134,9 @@ namespace ShaiyaOverlay
                                 U8 TType = 0;
                                 U16 BaseCd = 0;
                                 Memory::ReadSafe(LNode + 0x32, &Cat);
-                                Memory::ReadSafe(LNode + 0x64, &TType);
-                                Memory::ReadSafe(LNode + 0x58, &BaseCd);
-                                if (OutPassive) *OutPassive = (Cat == 10);
+                                Memory::ReadSafe(LNode + Offsets.SkillNodeTargetType, &TType);
+                                Memory::ReadSafe(LNode + Offsets.SkillNodeBaseCooldown, &BaseCd);
+                                if (OutPassive) *OutPassive = (TType == 0 || Cat == 10);
                                 if (OutTargetType) *OutTargetType = TType;
                                 if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
 
@@ -145,13 +148,14 @@ namespace ShaiyaOverlay
                                         if (Temp[0] != '\0' && !StringUtils::Equals(Temp, "???") && !StringUtils::Equals(Temp, "placeholder"))
                                         {
                                             StringUtils::Copy(OutName, Temp, MaxLen);
+                                            StringUtils::NormalizeAccents(OutName, MaxLen, false);
                                             return true;
                                         }
                                     }
                                 }
                             }
                             if (LNode == LvlFirst) break;
-                            if (!Memory::ReadSafe(LNode + 8, &LNode)) break;
+                            if (!Memory::ReadSafe(LNode + 0x08, &LNode)) break;
                             ++LWalk;
                         }
                     }
@@ -163,8 +167,8 @@ namespace ShaiyaOverlay
                     {
                         U64 FB = 0;
                         U64 EB = 0;
-                        if (!Memory::ReadSafe(InnerBuckets + B * 16, &FB) ||
-                            !Memory::ReadSafe(InnerBuckets + B * 16 + 8, &EB))
+                        if (!Memory::ReadSafe(InnerBuckets + B * 0x10, &FB) ||
+                            !Memory::ReadSafe(InnerBuckets + B * 0x10 + 0x08, &EB))
                             continue;
 
                         U64 LN = EB;
@@ -177,9 +181,9 @@ namespace ShaiyaOverlay
                             U8 TType = 0;
                             U16 BaseCd = 0;
                             Memory::ReadSafe(LN + 0x32, &Cat);
-                            Memory::ReadSafe(LN + 0x3E, &TType);
-                            Memory::ReadSafe(LN + 0x58, &BaseCd);
-                            if (OutPassive) *OutPassive = (Cat == 10);
+                            Memory::ReadSafe(LN + Offsets.SkillNodeTargetType, &TType);
+                            Memory::ReadSafe(LN + Offsets.SkillNodeBaseCooldown, &BaseCd);
+                            if (OutPassive) *OutPassive = (TType == 0 || Cat == 10);
                             if (OutTargetType) *OutTargetType = TType;
                             if (OutBaseCooldownSec) *OutBaseCooldownSec = BaseCd;
 
@@ -191,12 +195,13 @@ namespace ShaiyaOverlay
                                     if (Temp[0] != '\0' && !StringUtils::Equals(Temp, "???") && !StringUtils::Equals(Temp, "placeholder"))
                                     {
                                         StringUtils::Copy(OutName, Temp, MaxLen);
+                                        StringUtils::NormalizeAccents(OutName, MaxLen, false);
                                         return true;
                                     }
                                 }
                             }
                             if (LN == FB) break;
-                            if (!Memory::ReadSafe(LN + 8, &LN)) break;
+                            if (!Memory::ReadSafe(LN + 0x08, &LN)) break;
                             ++LW;
                         }
                     }
@@ -205,7 +210,7 @@ namespace ShaiyaOverlay
             }
 
             if (Node == FirstInBucket) break;
-            if (!Memory::ReadSafe(Node + 8, &Node)) break;
+            if (!Memory::ReadSafe(Node + 0x08, &Node)) break;
             ++Walk;
         }
 
@@ -220,10 +225,10 @@ namespace ShaiyaOverlay
         U64 FirstPtr = 0;
         U64 LastPtr = 0;
 
-        if (!Memory::ReadSafe(SkillVecAddr + 8, &FirstPtr) || !FirstPtr)
+        if (!Memory::ReadSafe(SkillVecAddr + 0x08, &FirstPtr) || !FirstPtr)
             return;
 
-        if (!Memory::ReadSafe(SkillVecAddr + 16, &LastPtr) || !LastPtr || LastPtr <= FirstPtr)
+        if (!Memory::ReadSafe(SkillVecAddr + 0x10, &LastPtr) || !LastPtr || LastPtr <= FirstPtr)
             return;
 
         U64 ElementCount = (LastPtr - FirstPtr) / sizeof(U64);
@@ -242,8 +247,8 @@ namespace ShaiyaOverlay
             U8 SlotIdx = 0xFF;
             U8 Lvl = 0;
             Memory::ReadSafe(SkillDataPtr, &SlotIdx);
-            Memory::ReadSafe(SkillDataPtr + 2, &Info.SkillId);
-            Memory::ReadSafe(SkillDataPtr + 4, &Lvl);
+            Memory::ReadSafe(SkillDataPtr + 0x02, &Info.SkillId);
+            Memory::ReadSafe(SkillDataPtr + 0x04, &Lvl);
             Info.Level = Lvl;
             Info.IsLearned = (SlotIdx != 0xFF);
             Info.LearnedSlot = SlotIdx;
@@ -253,8 +258,8 @@ namespace ShaiyaOverlay
 
             U32 Duration = 0;
             U32 StartTick = 0;
-            Memory::ReadSafe(SkillDataPtr + 8, &Duration);
-            Memory::ReadSafe(SkillDataPtr + 12, &StartTick);
+            Memory::ReadSafe(SkillDataPtr + 0x08, &Duration);
+            Memory::ReadSafe(SkillDataPtr + 0x0C, &StartTick);
 
             U16 BaseCdSec = 0;
             Info.CooldownRemaining = 0.0f;
@@ -363,7 +368,7 @@ namespace ShaiyaOverlay
         if (!Offsets.CastSkillAddr || LearnedSlot == 0xFF)
             return false;
 
-        const bool IsBuff = (TargetType == 0 || TargetType == 8);
+        const bool IsBuff = (TargetType == 0 || TargetType == 2 || TargetType == 8);
         U32 TargetWorldId = 0;
 
         if (IsBuff)
@@ -416,8 +421,8 @@ namespace ShaiyaOverlay
             {
                 U64 FirstPtr = 0;
                 U64 LastPtr = 0;
-                if (Memory::ReadSafe(Offsets.SkillVector + 8, &FirstPtr) && FirstPtr &&
-                    Memory::ReadSafe(Offsets.SkillVector + 16, &LastPtr) && LastPtr > FirstPtr)
+                if (Memory::ReadSafe(Offsets.SkillVector + 0x08, &FirstPtr) && FirstPtr &&
+                    Memory::ReadSafe(Offsets.SkillVector + 0x10, &LastPtr) && LastPtr > FirstPtr)
                 {
                     U64 Count = (LastPtr - FirstPtr) / sizeof(U64);
                     for (U32 i = 0; i < Count; ++i)
@@ -430,7 +435,7 @@ namespace ShaiyaOverlay
                             if (Slot == LearnedSlot)
                             {
                                 U32 Now = GetGameTimeMs();
-                                *reinterpret_cast<U32*>(SkillDataPtr + 12) = Now;
+                                *reinterpret_cast<U32*>(SkillDataPtr + 0x0C) = Now;
                                 break;
                             }
                         }

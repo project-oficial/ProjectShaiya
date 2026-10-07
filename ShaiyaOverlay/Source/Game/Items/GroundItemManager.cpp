@@ -89,7 +89,8 @@ namespace ShaiyaOverlay
                             TempName[sizeof(TempName) - 1] = '\0';
                             if (TempName[0] != '\0')
                             {
-                                StringUtils::AnsiToUtf8(TempName, OutName, MaxLen);
+                                StringUtils::Copy(OutName, TempName, MaxLen);
+                                StringUtils::NormalizeAccents(OutName, MaxLen, false);
                                 return true;
                             }
                         }

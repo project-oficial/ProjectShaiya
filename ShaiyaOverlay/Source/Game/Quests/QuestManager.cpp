@@ -206,13 +206,13 @@ namespace ShaiyaOverlay
         if (!Offsets.PlayerInventory || ItemType == 0)
             return 0;
 
-        U64 SlotStart = Offsets.PlayerInventory + 17521;
+        U64 SlotStart = Offsets.PlayerInventory + Offsets.PlayerInventoryBagsOffset;
         U32 Total = 0;
 
         for (U32 I = 0; I < 240; ++I)
         {
             U8 Data[4] = { 0 };
-            if (Memory::ReadBytesSafe(SlotStart + I * 132, Data, 3))
+            if (Memory::ReadBytesSafe(SlotStart + I * Offsets.InventorySlotStride, Data, 3))
             {
                 if (Data[0] == ItemType && Data[1] == ItemTypeId)
                 {
@@ -300,17 +300,17 @@ namespace ShaiyaOverlay
 
         for (U32 I = 0; I < Total; ++I)
         {
-            U64 EntryPtr = ArrayPtr + I * 48;
+            U64 EntryPtr = ArrayPtr + I * 0x30;
             U8 Type = 0;
             U16 Id = 0;
-            Memory::ReadSafe(EntryPtr + 24, &Type);
-            Memory::ReadSafe(EntryPtr + 28, &Id);
+            Memory::ReadSafe(EntryPtr + 0x18, &Type);
+            Memory::ReadSafe(EntryPtr + 0x1C, &Id);
 
             if (Type == NpcType && Id == NpcId)
             {
                 Memory::ReadSafe(EntryPtr, &OutPos.X);
-                Memory::ReadSafe(EntryPtr + 4, &OutPos.Y);
-                Memory::ReadSafe(EntryPtr + 8, &OutPos.Z);
+                Memory::ReadSafe(EntryPtr + 0x04, &OutPos.Y);
+                Memory::ReadSafe(EntryPtr + 0x08, &OutPos.Z);
                 F32 GroundY = NavigationManager::GetGroundHeight(OutPos.X, OutPos.Z);
                 if (GroundY != 0.0f)
                     OutPos.Y = GroundY;
@@ -329,23 +329,23 @@ namespace ShaiyaOverlay
         U32 TotalNpcs = 0;
         U64 NpcsArrayPtr = 0;
 
-        if (!Memory::ReadSafe(Offsets.NpcFile + 24, &TotalNpcs) || TotalNpcs == 0)
+        if (!Memory::ReadSafe(Offsets.NpcFile + 0x18, &TotalNpcs) || TotalNpcs == 0)
             return false;
 
-        if (!Memory::ReadSafe(Offsets.NpcFile + 32, &NpcsArrayPtr) || !NpcsArrayPtr)
+        if (!Memory::ReadSafe(Offsets.NpcFile + 0x20, &NpcsArrayPtr) || !NpcsArrayPtr)
             return false;
 
         for (U32 I = 0; I < TotalNpcs; ++I)
         {
-            U64 NpcRec = NpcsArrayPtr + I * 544;
+            U64 NpcRec = NpcsArrayPtr + I * Offsets.NpcFileRecordStride;
             U16 CurrentId = 0;
-            Memory::ReadSafe(NpcRec + 2, &CurrentId);
+            Memory::ReadSafe(NpcRec + 0x02, &CurrentId);
 
             if (CurrentId == (U16)NpcId)
             {
-                Memory::ReadSafe(NpcRec + 44, &OutPos.X);
-                Memory::ReadSafe(NpcRec + 48, &OutPos.Y);
-                Memory::ReadSafe(NpcRec + 52, &OutPos.Z);
+                Memory::ReadSafe(NpcRec + 0x2C, &OutPos.X);
+                Memory::ReadSafe(NpcRec + 0x30, &OutPos.Y);
+                Memory::ReadSafe(NpcRec + 0x34, &OutPos.Z);
                 F32 GroundY = NavigationManager::GetGroundHeight(OutPos.X, OutPos.Z);
                 if (GroundY != 0.0f)
                     OutPos.Y = GroundY;
@@ -372,10 +372,10 @@ namespace ShaiyaOverlay
 
         U64 FirstPtr = 0;
         U64 LastPtr = 0;
-        if (!Memory::ReadSafe(Offsets.QuestVector + 8, &FirstPtr) || !FirstPtr)
+        if (!Memory::ReadSafe(Offsets.QuestVector + 0x08, &FirstPtr) || !FirstPtr)
             return;
 
-        if (!Memory::ReadSafe(Offsets.QuestVector + 16, &LastPtr) || !LastPtr || LastPtr <= FirstPtr)
+        if (!Memory::ReadSafe(Offsets.QuestVector + 0x10, &LastPtr) || !LastPtr || LastPtr <= FirstPtr)
             return;
 
         U64 Count = (LastPtr - FirstPtr) / sizeof(U64);
@@ -388,8 +388,8 @@ namespace ShaiyaOverlay
         U64 DbQuestsArray = 0;
         if (Offsets.NpcFile)
         {
-            Memory::ReadSafe(Offsets.NpcFile + 8, &TotalDbQuests);
-            Memory::ReadSafe(Offsets.NpcFile + 16, &DbQuestsArray);
+            Memory::ReadSafe(Offsets.NpcFile + 0x08, &TotalDbQuests);
+            Memory::ReadSafe(Offsets.NpcFile + 0x10, &DbQuestsArray);
         }
 
         for (U32 I = 0; I < (U32)Count; ++I)
@@ -411,7 +411,7 @@ namespace ShaiyaOverlay
             Quest.DestinationName[0] = '\0';
 
             Memory::ReadSafe(QuestDataPtr, &Quest.QuestId);
-            Memory::ReadSafe(QuestDataPtr + 8, &Quest.Step);
+            Memory::ReadSafe(QuestDataPtr + 0x08, &Quest.Step);
 
             if (Quest.QuestId == 0)
                 continue;
@@ -425,20 +425,23 @@ namespace ShaiyaOverlay
             // 1. Read Quest Text, Mob Objectives, and Item Collection Objectives
             if (Offsets.QuestTextTable)
             {
-                U64 QuestTxtRec = Offsets.QuestTextTable + (Quest.QuestId - 1) * 488;
+                U64 QuestTxtRec = Offsets.QuestTextTable + (Quest.QuestId - 1) * Offsets.QuestTextRecordStride;
 
                 // Title string
                 U64 TitlePtr = 0;
-                if (Memory::ReadSafe(QuestTxtRec + 8, &TitlePtr) && TitlePtr)
+                if (Memory::ReadSafe(QuestTxtRec + 0x08, &TitlePtr) && TitlePtr)
                 {
                     char TempTitle[64] = { 0 };
                     if (Memory::ReadBytesSafe(TitlePtr, TempTitle, sizeof(TempTitle) - 1))
+                    {
                         StringUtils::Copy(Quest.Title, TempTitle, sizeof(Quest.Title));
+                        StringUtils::NormalizeAccents(Quest.Title, sizeof(Quest.Title), false);
+                    }
                 }
 
                 // Description and target tags
                 U64 DescPtr = 0;
-                if (Memory::ReadSafe(QuestTxtRec + 16, &DescPtr) && DescPtr)
+                if (Memory::ReadSafe(QuestTxtRec + 0x10, &DescPtr) && DescPtr)
                 {
                     char TempDesc[300] = { 0 };
                     if (Memory::ReadBytesSafe(DescPtr, TempDesc, sizeof(TempDesc) - 1))
@@ -451,9 +454,9 @@ namespace ShaiyaOverlay
                 U16 Mob1Id = 0;
                 U8 Needed1 = 0;
                 U8 Current1 = 0;
-                Memory::ReadSafe(QuestTxtRec + 106, &Mob1Id);
-                Memory::ReadSafe(QuestTxtRec + 110, &Needed1);
-                Memory::ReadSafe(QuestDataPtr + 4, &Current1);
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextMobHunt1, &Mob1Id);
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextMobHunt1Count, &Needed1);
+                Memory::ReadSafe(QuestDataPtr + 0x04, &Current1);
 
                 if (Mob1Id > 0 && Needed1 > 0)
                 {
@@ -472,9 +475,9 @@ namespace ShaiyaOverlay
                 U16 Mob2Id = 0;
                 U8 Needed2 = 0;
                 U8 Current2 = 0;
-                Memory::ReadSafe(QuestTxtRec + 108, &Mob2Id);
-                Memory::ReadSafe(QuestTxtRec + 111, &Needed2);
-                Memory::ReadSafe(QuestDataPtr + 5, &Current2);
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextMobHunt2, &Mob2Id);
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextMobHunt2Count, &Needed2);
+                Memory::ReadSafe(QuestDataPtr + 0x05, &Current2);
 
                 if (Mob2Id > 0 && Needed2 > 0)
                 {
@@ -491,18 +494,22 @@ namespace ShaiyaOverlay
                 }
 
                 // Item Collection objectives (up to 3)
-                // Slot 1: Type at 96, TypeId at 97, CountNeeded at 98
-                // Slot 2: Type at 99, TypeId at 100, CountNeeded at 101
-                // Slot 3: Type at 102, TypeId at 103, CountNeeded at 104
-                constexpr U32 ItemOffsets[3] = { 96, 99, 102 };
+                // Slot 1: Type at 0x60, TypeId at 0x61, CountNeeded at 0x62
+                // Slot 2: Type at 0x63, TypeId at 0x64, CountNeeded at 0x65
+                // Slot 3: Type at 0x66, TypeId at 0x67, CountNeeded at 0x68
+                const U32 ItemOffsets[3] = {
+                    Offsets.QuestTextItemTypeSlot1,
+                    Offsets.QuestTextItemTypeSlot1 + 3,
+                    Offsets.QuestTextItemTypeSlot1 + 6
+                };
                 for (U32 ItemIdx = 0; ItemIdx < 3; ++ItemIdx)
                 {
                     U8 IType = 0;
                     U8 ITypeId = 0;
                     U8 INeeded = 0;
                     Memory::ReadSafe(QuestTxtRec + ItemOffsets[ItemIdx], &IType);
-                    Memory::ReadSafe(QuestTxtRec + ItemOffsets[ItemIdx] + 1, &ITypeId);
-                    Memory::ReadSafe(QuestTxtRec + ItemOffsets[ItemIdx] + 2, &INeeded);
+                    Memory::ReadSafe(QuestTxtRec + ItemOffsets[ItemIdx] + 0x01, &ITypeId);
+                    Memory::ReadSafe(QuestTxtRec + ItemOffsets[ItemIdx] + 0x02, &INeeded);
 
                     if (IType > 0 && INeeded > 0)
                     {
@@ -554,9 +561,9 @@ namespace ShaiyaOverlay
             // 2. Read End NPC info from QuestTextTable record (+0x5C = Type, +0x5E = Id)
             if (Offsets.QuestTextTable)
             {
-                U64 QuestTxtRec = Offsets.QuestTextTable + (Quest.QuestId - 1) * 488;
-                Memory::ReadSafe(QuestTxtRec + 0x5C, &Quest.EndNpcType);
-                Memory::ReadSafe(QuestTxtRec + 0x5E, &Quest.EndNpcId);
+                U64 QuestTxtRec = Offsets.QuestTextTable + (Quest.QuestId - 1) * Offsets.QuestTextRecordStride;
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextEndNpcType, &Quest.EndNpcType);
+                Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextEndNpcId, &Quest.EndNpcId);
             }
 
             if (Quest.EndNpcType > 0 || Quest.EndNpcId > 0)
@@ -619,7 +626,7 @@ namespace ShaiyaOverlay
             while (NpcCurr && NpcCurr != NpcHeadNode && Walk < 64)
             {
                 U64 NpcPtr = 0;
-                Memory::ReadSafe(NpcCurr + 24, &NpcPtr);
+                Memory::ReadSafe(NpcCurr + 0x18, &NpcPtr);
                 if (NpcPtr)
                 {
                     LiveNpcInfo Info;
@@ -628,6 +635,7 @@ namespace ShaiyaOverlay
                     Memory::ReadSafe(NpcPtr + Offsets.NpcPosY, &Info.Pos.Y);
                     Memory::ReadSafe(NpcPtr + Offsets.NpcPosZ, &Info.Pos.Z);
                     Memory::ReadBytesSafe(NpcPtr + Offsets.NpcName, Info.Name, sizeof(Info.Name) - 1);
+                    StringUtils::NormalizeAccents(Info.Name, sizeof(Info.Name), false);
                     LiveNpcs.Add(Info);
                 }
                 Memory::ReadSafe(NpcCurr, &NpcCurr);
@@ -656,9 +664,9 @@ namespace ShaiyaOverlay
                 U16 Qid = 0;
 
                 Memory::ReadSafe(ItemPtr, &Fx);
-                Memory::ReadSafe(ItemPtr + 4, &Fz);
-                Memory::ReadSafe(ItemPtr + 8, &IsStart);
-                Memory::ReadSafe(ItemPtr + 10, &Qid);
+                Memory::ReadSafe(ItemPtr + 0x04, &Fz);
+                Memory::ReadSafe(ItemPtr + 0x08, &IsStart);
+                Memory::ReadSafe(ItemPtr + 0x0A, &Qid);
 
                 QuestMarker Marker;
                 Marker.NpcName[0] = '\0';

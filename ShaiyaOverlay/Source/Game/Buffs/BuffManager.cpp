@@ -225,28 +225,28 @@ namespace ShaiyaOverlay
 
         U64 FirstPtr = 0;
         U64 LastPtr = 0;
-        if (!Memory::ReadSafe(pMainUI + 72, &FirstPtr) || !FirstPtr ||
-            !Memory::ReadSafe(pMainUI + 80, &LastPtr) || LastPtr < FirstPtr)
+        if (!Memory::ReadSafe(pMainUI + Offsets.MainUIBuffVectorFirst, &FirstPtr) || !FirstPtr ||
+            !Memory::ReadSafe(pMainUI + Offsets.MainUIBuffVectorLast, &LastPtr) || LastPtr < FirstPtr)
         {
             return;
         }
 
-        U64 Count = (LastPtr - FirstPtr) / 36;
+        U64 Count = (LastPtr - FirstPtr) / 0x24;
         if (Count > 32)
             Count = 32;
 
         for (U32 I = 0; I < Count; ++I)
         {
-            U64 EntryAddr = FirstPtr + I * 36;
+            U64 EntryAddr = FirstPtr + I * 0x24;
             U16 SkillId = 0;
             U8 Level = 0;
             U32 TotalDurMs = 0;
             U32 RemMs = 0;
 
-            Memory::ReadSafe(EntryAddr + 4, &SkillId);
-            Memory::ReadSafe(EntryAddr + 6, &Level);
-            Memory::ReadSafe(EntryAddr + 8, &TotalDurMs);
-            Memory::ReadSafe(EntryAddr + 16, &RemMs);
+            Memory::ReadSafe(EntryAddr + 0x04, &SkillId);
+            Memory::ReadSafe(EntryAddr + 0x06, &Level);
+            Memory::ReadSafe(EntryAddr + 0x08, &TotalDurMs);
+            Memory::ReadSafe(EntryAddr + 0x10, &RemMs);
 
             if (SkillId == 0 || RemMs == 0)
                 continue;
@@ -270,17 +270,18 @@ namespace ShaiyaOverlay
                     if (RecPtr)
                     {
                         U64 NamePtr = 0;
-                        if (Memory::ReadSafe(RecPtr + 8, &NamePtr) && NamePtr)
+                        if (Memory::ReadSafe(RecPtr + 0x08, &NamePtr) && NamePtr)
                         {
                             char Temp[64] = { 0 };
                             if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                             {
-                                StringUtils::AnsiToUtf8(Temp, Buff.Name, sizeof(Buff.Name));
+                                StringUtils::Copy(Buff.Name, Temp, sizeof(Buff.Name));
+                                StringUtils::NormalizeAccents(Buff.Name, sizeof(Buff.Name), false);
                             }
                         }
 
                         U8 TargetType = 0;
-                        if (Memory::ReadSafe(RecPtr + 39, &TargetType))
+                        if (Memory::ReadSafe(RecPtr + 0x27, &TargetType))
                         {
                             Buff.IsDebuff = (TargetType == 3);
                         }

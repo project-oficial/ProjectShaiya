@@ -45,16 +45,19 @@ namespace ShaiyaOverlay
         Config.HpThresholdPercent = static_cast<F32>(atof(Buf));
 
         GetPrivateProfileStringA("AutoHeal", "SelectedHpItem", "Auto", Config.SelectedHpItem, sizeof(Config.SelectedHpItem), IniPath);
+        StringUtils::NormalizeAccents(Config.SelectedHpItem, sizeof(Config.SelectedHpItem), false);
 
         GetPrivateProfileStringA("AutoHeal", "MpThresholdPercent", "40.0", Buf, sizeof(Buf), IniPath);
         Config.MpThresholdPercent = static_cast<F32>(atof(Buf));
 
         GetPrivateProfileStringA("AutoHeal", "SelectedMpItem", "Auto", Config.SelectedMpItem, sizeof(Config.SelectedMpItem), IniPath);
+        StringUtils::NormalizeAccents(Config.SelectedMpItem, sizeof(Config.SelectedMpItem), false);
 
         GetPrivateProfileStringA("AutoHeal", "SpThresholdPercent", "30.0", Buf, sizeof(Buf), IniPath);
         Config.SpThresholdPercent = static_cast<F32>(atof(Buf));
 
         GetPrivateProfileStringA("AutoHeal", "SelectedSpItem", "Auto", Config.SelectedSpItem, sizeof(Config.SelectedSpItem), IniPath);
+        StringUtils::NormalizeAccents(Config.SelectedSpItem, sizeof(Config.SelectedSpItem), false);
 
         Config.PotionCooldownMs = GetPrivateProfileIntA("AutoHeal", "PotionCooldownMs", 1500, IniPath);
 

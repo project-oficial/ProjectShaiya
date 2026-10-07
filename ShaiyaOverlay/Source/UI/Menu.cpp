@@ -10,6 +10,7 @@
 #include "Game/Combat/RiskCalculator.h"
 #include "Game/Combat/ComboManager.h"
 #include "Game/Combat/HealManager.h"
+#include "Game/Bot/GrindBot.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Items/InventoryManager.h"
 #include "Game/QuickSlots/QuickSlotManager.h"
@@ -64,6 +65,7 @@ namespace ShaiyaOverlay
         NavigationManager::Update();
         ComboManager::Update();
         HealManager::Update();
+        GrindBot::Update();
 
         const PlayerData& Player = EntityManager::GetLocalPlayer();
         const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
@@ -77,9 +79,10 @@ namespace ShaiyaOverlay
         if (NavigationManager::IsNavigating()) BannerHeight += 20.0f;
         if (ComboManager::IsActive()) BannerHeight += 20.0f;
         if (HealManager::GetConfig().Enabled) BannerHeight += 20.0f;
+        if (GrindBot::GetConfig().Enabled) BannerHeight += 20.0f;
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(400.0f, BannerHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(440.0f, BannerHeight), ImGuiCond_Always);
 
         ImGuiWindowFlags BannerFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
         if (!WndProcHook::IsMenuOpen())
@@ -98,7 +101,7 @@ namespace ShaiyaOverlay
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
-                if (ImGui::SmallButton("DESCARREGAR MOD"))
+                if (ImGui::SmallButton("UNLOAD MOD (END)"))
                 {
                     WndProcHook::RequestUnload();
                 }
@@ -107,7 +110,7 @@ namespace ShaiyaOverlay
 
             if (NavigationManager::IsComputingPath())
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), ">> AUTO-WALK: Calculando rota para %s...",
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), ">> AUTO-WALK: Calculating route to %s...",
                     NavigationManager::GetTargetName());
                 if (WndProcHook::IsMenuOpen())
                 {
@@ -134,7 +137,7 @@ namespace ShaiyaOverlay
 
             if (ComboManager::IsActive())
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.0f, 1.0f), ">> AUTO-COMBO: ATIVO (Tecla: C)");
+                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.0f, 1.0f), ">> AUTO-COMBO: ACTIVE (Key: C)");
                 if (WndProcHook::IsMenuOpen())
                 {
                     ImGui::SameLine();
@@ -150,12 +153,26 @@ namespace ShaiyaOverlay
                 InventoryItem bestHp = { 0 };
                 if (HealManager::FindBestHpItem(&bestHp))
                 {
-                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), ">> AUTO-CURA: ATIVA (HP <= %.0f%% -> %s)",
+                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), ">> AUTO-HEAL: ACTIVE (HP <= %.0f%% -> %s)",
                         HealManager::GetConfig().HpThresholdPercent, bestHp.Name);
                 }
                 else
                 {
-                    ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), ">> AUTO-CURA: ATIVA (Sem item de HP no inventario)");
+                    ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), ">> AUTO-HEAL: ACTIVE (No HP item in bag)");
+                }
+            }
+
+            if (GrindBot::GetConfig().Enabled)
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.5f, 1.0f, 1.0f), ">> GRIND BOT: ACTIVE [%s] (Kills: %u)",
+                    GrindBot::GetStateName(), GrindBot::GetStats().MonstersKilled);
+                if (WndProcHook::IsMenuOpen())
+                {
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("STOP BOT"))
+                    {
+                        GrindBot::ToggleActive();
+                    }
                 }
             }
         }
@@ -165,1490 +182,711 @@ namespace ShaiyaOverlay
         RenderGroundItemSnaplines();
         RenderQuestWaypoints();
 
-        // Detailed overlay windows visible when UI is opened via INSERT
+        // Single Unified Control Panel with Tabs (visible when UI is opened via INSERT)
         if (!WndProcHook::IsMenuOpen())
             return;
 
-        RenderOverviewWindow();
-        RenderEntitiesWindow();
-        RenderGroundItemsWindow();
-        RenderInventoryWindow();
-        RenderSkillsWindow();
-        RenderQuickSlotsWindow();
-        RenderQuestsWindow();
-        RenderBuffsWindow();
-        RenderAutoComboWindow();
-        RenderAutoHealWindow();
+        RenderMainWindow();
     }
 
-    void Menu::RenderOverviewWindow()
+    void Menu::RenderMainWindow()
+    {
+        ImGui::SetNextWindowPos(ImVec2(20.0f, 90.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(740.0f, 560.0f), ImGuiCond_FirstUseEver);
+
+        if (ImGui::Begin("Shaiya Assistant - Control Panel", nullptr, ImGuiWindowFlags_None))
+        {
+            if (ImGui::BeginTabBar("MainControlTabBar", ImGuiTabBarFlags_None))
+            {
+                if (ImGui::BeginTabItem("Status"))
+                {
+                    RenderStatusTab();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Auto-Combo"))
+                {
+                    RenderAutoComboTab();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Auto-Heal"))
+                {
+                    RenderAutoHealTab();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Auto-Loot"))
+                {
+                    RenderAutoLootTab();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Auto-Buff"))
+                {
+                    RenderAutoBuffTab();
+                    ImGui::EndTabItem();
+                }
+
+                if (ImGui::BeginTabItem("Grind Bot"))
+                {
+                    RenderGrindBotTab();
+                    ImGui::EndTabItem();
+                }
+
+                ImGui::EndTabBar();
+            }
+        }
+        ImGui::End();
+    }
+
+    void Menu::RenderStatusTab()
     {
         const PlayerData& Player = EntityManager::GetLocalPlayer();
         const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
         RiskAssessment Risk = RiskCalculator::Evaluate(Player, Monsters);
 
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 95.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(380.0f, 430.0f), ImGuiCond_FirstUseEver);
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Player Status");
+        ImGui::Separator();
 
-        if (ImGui::Begin("Local Player & Hardcore Risk"))
+        if (Player.Valid)
         {
-            if (Player.Valid)
-            {
-                ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Character ID: %u | Level: %u", Player.Id, Player.Level);
-                ImGui::Text("Position: X: %.1f  Y: %.1f  Z: %.1f", Player.Position.X, Player.Position.Y, Player.Position.Z);
-                ImGui::Separator();
+            ImGui::Text("Character ID: %u | Level: %u", Player.Id, Player.Level);
+            ImGui::Text("Position: X: %.1f | Y: %.1f | Z: %.1f", Player.Position.X, Player.Position.Y, Player.Position.Z);
+            ImGui::Spacing();
 
-                // Health (HP)
-                F32 HpPct = Player.GetHpPercentage();
-                char HpText[64];
-                StringUtils::Format(HpText, sizeof(HpText), "%u / %u (%.0f%%)", Player.CurrentHp, Player.MaxHp, HpPct * 100.0f);
+            // HP Bar
+            F32 HpPct = Player.GetHpPercentage();
+            char HpText[64];
+            StringUtils::Format(HpText, sizeof(HpText), "%u / %u (%.0f%%)", Player.CurrentHp, Player.MaxHp, HpPct * 100.0f);
+            ImVec4 HpBarColor = (HpPct < 0.35f) ? ImVec4(0.9f, 0.1f, 0.1f, 1.0f) : ImVec4(0.1f, 0.8f, 0.2f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, HpBarColor);
+            ImGui::Text("Health (HP):");
+            ImGui::ProgressBar(HpPct, ImVec2(-1.0f, 0.0f), HpText);
+            ImGui::PopStyleColor();
 
-                ImVec4 HpBarColor = (HpPct < 0.35f) ? ImVec4(0.9f, 0.1f, 0.1f, 1.0f) : ImVec4(0.1f, 0.8f, 0.2f, 1.0f);
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, HpBarColor);
-                ImGui::Text("Vida (HP):");
-                ImGui::ProgressBar(HpPct, ImVec2(-1.0f, 0.0f), HpText);
-                ImGui::PopStyleColor();
+            // MP Bar
+            F32 MpPct = Player.GetMpPercentage();
+            char MpText[64];
+            StringUtils::Format(MpText, sizeof(MpText), "%u / %u (%.0f%%)", Player.CurrentMp, Player.MaxMp, MpPct * 100.0f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.5f, 0.95f, 1.0f));
+            ImGui::Text("Mana (MP):");
+            ImGui::ProgressBar(MpPct, ImVec2(-1.0f, 0.0f), MpText);
+            ImGui::PopStyleColor();
 
-                // Mana (MP)
-                F32 MpPct = Player.GetMpPercentage();
-                char MpText[64];
-                StringUtils::Format(MpText, sizeof(MpText), "%u / %u (%.0f%%)", Player.CurrentMp, Player.MaxMp, MpPct * 100.0f);
-
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.2f, 0.5f, 0.95f, 1.0f));
-                ImGui::Text("Mana (MP):");
-                ImGui::ProgressBar(MpPct, ImVec2(-1.0f, 0.0f), MpText);
-                ImGui::PopStyleColor();
-
-                // Stamina (SP)
-                F32 SpPct = Player.GetSpPercentage();
-                char SpText[64];
-                StringUtils::Format(SpText, sizeof(SpText), "%u / %u (%.0f%%)", Player.CurrentSp, Player.MaxSp, SpPct * 100.0f);
-
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.95f, 0.75f, 0.15f, 1.0f));
-                ImGui::Text("Estamina (SP):");
-                ImGui::ProgressBar(SpPct, ImVec2(-1.0f, 0.0f), SpText);
-                ImGui::PopStyleColor();
-
-                ImGui::Separator();
-                ImGui::Text("Death Threat Level: ");
-                ImGui::SameLine();
-                ImGui::TextColored(GetThreatColor(Risk.OverallThreat), "%s", Risk.Summary);
-
-                char ScoreText[32];
-                StringUtils::Format(ScoreText, sizeof(ScoreText), "Threat Score: %u / 100", Risk.ThreatScore);
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, GetThreatColor(Risk.OverallThreat));
-                ImGui::ProgressBar((F32)Risk.ThreatScore / 100.0f, ImVec2(-1.0f, 0.0f), ScoreText);
-                ImGui::PopStyleColor();
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Scanning character memory...");
-            }
-
-            ImGui::Separator();
-            GameState State = AutoLoginManager::GetCurrentGameState();
-            ImGui::Text("Game State: %s (%u)", AutoLoginManager::GetGameStateName(State), static_cast<U8>(State));
-            ImGui::Text("Auto-Login: %s", AutoLoginManager::GetStatusMessage());
-            if (AutoLoginManager::IsRunning())
-            {
-                if (ImGui::Button("Cancelar Auto-Login", ImVec2(-1.0f, 22.0f)))
-                {
-                    AutoLoginManager::Stop();
-                }
-            }
-            else
-            {
-                if (ImGui::Button("Executar Auto-Login Manual", ImVec2(-1.0f, 22.0f)))
-                {
-                    AutoLoginManager::Start();
-                }
-            }
-
-            ImGui::Separator();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.15f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
-            if (ImGui::Button("Descarregar / Ejetar Mod (Unload)", ImVec2(-1.0f, 26.0f)))
-            {
-                WndProcHook::RequestUnload();
-            }
-            ImGui::PopStyleColor(3);
+            // SP Bar
+            F32 SpPct = Player.GetSpPercentage();
+            char SpText[64];
+            StringUtils::Format(SpText, sizeof(SpText), "%u / %u (%.0f%%)", Player.CurrentSp, Player.MaxSp, SpPct * 100.0f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.95f, 0.75f, 0.15f, 1.0f));
+            ImGui::Text("Stamina (SP):");
+            ImGui::ProgressBar(SpPct, ImVec2(-1.0f, 0.0f), SpText);
+            ImGui::PopStyleColor();
         }
-        ImGui::End();
+        else
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "Waiting for character data in memory...");
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Hardcore Threat & Environment");
+        ImGui::Text("Threat Assessment: ");
+        ImGui::SameLine();
+        ImGui::TextColored(GetThreatColor(Risk.OverallThreat), "%s", Risk.Summary);
+
+        char ScoreText[32];
+        StringUtils::Format(ScoreText, sizeof(ScoreText), "Threat Score: %u / 100", Risk.ThreatScore);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, GetThreatColor(Risk.OverallThreat));
+        ImGui::ProgressBar((F32)Risk.ThreatScore / 100.0f, ImVec2(-1.0f, 0.0f), ScoreText);
+        ImGui::PopStyleColor();
+
+        ImGui::Text("Hostiles Nearby: %u | Hostiles Close (<12m): %u", Risk.NearbyHostilesCount, Risk.CloseHostilesCount);
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Visual Overlays (ESP)");
+        ImGui::Checkbox("Draw Ground Item Snaplines", &SnaplinesEnabled);
+        ImGui::SameLine();
+        ImGui::Checkbox("Draw Quest Waypoint Lines", &QuestWaypointsEnabled);
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "System & Login Actions");
+        GameState State = AutoLoginManager::GetCurrentGameState();
+        ImGui::Text("Game State: %s (%u) | Auto-Login Status: %s",
+            AutoLoginManager::GetGameStateName(State), static_cast<U8>(State), AutoLoginManager::GetStatusMessage());
+
+        if (AutoLoginManager::IsRunning())
+        {
+            if (ImGui::Button("Cancel Auto-Login"))
+                AutoLoginManager::Stop();
+        }
+        else
+        {
+            if (ImGui::Button("Run Manual Auto-Login"))
+                AutoLoginManager::Start();
+        }
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.85f, 0.25f, 0.25f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
+        if (ImGui::Button("Unload Mod DLL (END)"))
+        {
+            WndProcHook::RequestUnload();
+        }
+        ImGui::PopStyleColor(3);
     }
 
-    void Menu::RenderEntitiesWindow()
-    {
-        const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
-        U32 MonsterCount = Monsters.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(400.0f, 10.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(570.0f, 315.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Nearby Hostiles & Entities"))
-        {
-            ImGui::Text("Entities in Range: %u", MonsterCount);
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("EntitiesTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("Mob ID", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-                ImGui::TableSetupColumn("Target Name", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Lvl", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("HP", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-                ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableSetupColumn("Risk", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-                ImGui::TableSetupColumn("Nav", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-                ImGui::TableHeadersRow();
-
-                for (U32 I = 0; I < MonsterCount; ++I)
-                {
-                    const MonsterEntity& Mob = Monsters[I];
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%u", Mob.MobId);
-
-                    ImGui::TableSetColumnIndex(1);
-                    if (Mob.IsQuestTarget)
-                    {
-                        ImGui::TextColored(ImVec4(1.0f, 0.35f, 1.0f, 1.0f), "[QUEST] %s", Mob.Name);
-                    }
-                    else
-                    {
-                        ImGui::Text("%s", Mob.Name);
-                    }
-
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%u", Mob.Level);
-
-                    ImGui::TableSetColumnIndex(3);
-                    if (Mob.Alive)
-                    {
-                        ImGui::Text("%u/%u", Mob.CurrentHp, Mob.MaxHp);
-                    }
-                    else
-                    {
-                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "DEAD");
-                    }
-
-                    ImGui::TableSetColumnIndex(4);
-                    ImVec4 DistColor = (Mob.Distance < 15.0f) ? ImVec4(1.0f, 0.2f, 0.2f, 1.0f) :
-                                      (Mob.Distance < 30.0f) ? ImVec4(1.0f, 0.8f, 0.2f, 1.0f) :
-                                                               ImVec4(0.4f, 0.8f, 0.4f, 1.0f);
-                    ImGui::TextColored(DistColor, "%.1fm", Mob.Distance);
-
-                    ImGui::TableSetColumnIndex(5);
-                    ImVec4 ThreatColor = GetThreatColor(Mob.Threat);
-                    const char* ThreatStr = (Mob.Threat == ThreatLevel::Fatal)  ? "FATAL" :
-                                            (Mob.Threat == ThreatLevel::High)   ? "HIGH" :
-                                            (Mob.Threat == ThreatLevel::Medium) ? "MED" :
-                                            (Mob.Threat == ThreatLevel::Low)    ? "LOW" : "NONE";
-                    ImGui::TextColored(ThreatColor, "%s", ThreatStr);
-
-                    ImGui::TableSetColumnIndex(6);
-                    if (Mob.Alive)
-                    {
-                        char BtnLabel[32];
-                        StringUtils::Format(BtnLabel, sizeof(BtnLabel), "Walk##M%u", Mob.WorldId);
-                        if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
-                        {
-                            NavigationManager::WalkTo(Mob.Position, Mob.Name, 2.0f);
-                        }
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("-");
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderGroundItemsWindow()
-    {
-        const FixedList<GroundItem, 128>& Items = GroundItemManager::GetGroundItems();
-        U32 ItemCount = Items.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(400.0f, 335.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(570.0f, 220.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Ground Loot & Dropped Items"))
-        {
-            AutoLootConfig& LootCfg = GroundItemManager::GetConfig();
-            ImGui::Checkbox("Auto-Loot", &LootCfg.Enabled);
-            ImGui::SameLine();
-            ImGui::Checkbox("Only My Drops", &LootCfg.OnlyMyDrops);
-            ImGui::SameLine();
-            ImGui::Checkbox("Auto-Walk", &LootCfg.AutoWalkToLoot);
-            ImGui::SameLine();
-            ImGui::Checkbox("Tracer Lines", &SnaplinesEnabled);
-            ImGui::SameLine();
-            ImGui::TextDisabled("| Total: %u", ItemCount);
-
-            if (LootCfg.Enabled)
-            {
-                ImGui::SetNextItemWidth(110.0f);
-                ImGui::SliderFloat("Pickup Radius", &LootCfg.PickupRadius, 1.5f, 5.0f, "%.1fm");
-                if (LootCfg.AutoWalkToLoot)
-                {
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(110.0f);
-                    ImGui::SliderFloat("Max Walk Dist", &LootCfg.MaxWalkDistance, 5.0f, 40.0f, "%.0fm");
-                }
-            }
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("GroundItemsTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("Item Name", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 85.0f);
-                ImGui::TableSetupColumn("Qty", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-                ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableSetupColumn("Pick", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("Walk", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableHeadersRow();
-
-                if (ItemCount == 0)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No dropped items nearby");
-                    ImGui::TableSetColumnIndex(1); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(2); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(3); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(4); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(5); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(6); ImGui::Text("-");
-                }
-                else
-                {
-                    const FixedList<ActiveQuest, 16>& ActiveQuests = QuestManager::GetActiveQuests();
-                    const PlayerData& Player = EntityManager::GetLocalPlayer();
-
-                    for (U32 I = 0; I < ItemCount; ++I)
-                    {
-                        const GroundItem& Item = Items[I];
-                        ImGui::TableNextRow();
-
-                        bool IsQuestDrop = false;
-                        U32 QCur = 0;
-                        U32 QNeed = 0;
-
-                        for (U32 Q = 0; Q < ActiveQuests.GetCount(); ++Q)
-                        {
-                            const ActiveQuest& ActQ = ActiveQuests[Q];
-                            for (U32 O = 0; O < ActQ.ItemObjectiveCount; ++O)
-                            {
-                                const QuestItemObjective& Obj = ActQ.ItemObjectives[O];
-                                if (!Obj.Completed && Item.Type == Obj.ItemType && Item.TypeId == Obj.ItemTypeId)
-                                {
-                                    IsQuestDrop = true;
-                                    QCur = Obj.CurrentCount;
-                                    QNeed = Obj.CountNeeded;
-                                    break;
-                                }
-                            }
-                            if (IsQuestDrop) break;
-                        }
-
-                        ImGui::TableSetColumnIndex(0);
-                        if (IsQuestDrop)
-                        {
-                            ImGui::TextColored(ImVec4(1.0f, 0.3f, 1.0f, 1.0f), "[QUEST] %s (%u/%u)", Item.Name, QCur, QNeed);
-                        }
-                        else if (Item.Type == 44)
-                            ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", Item.Name);
-                        else if (Item.Distance < 10.0f)
-                            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "%s", Item.Name);
-                        else
-                            ImGui::Text("%s", Item.Name);
-
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::Text("%s", Item.Category);
-
-                        ImGui::TableSetColumnIndex(2);
-                        ImGui::Text("%u", Item.Count > 0 ? Item.Count : 1);
-
-                        ImGui::TableSetColumnIndex(3);
-                        ImGui::Text("%.1fm", Item.Distance);
-
-                        ImGui::TableSetColumnIndex(4);
-                        if (Item.OwnerId == 0)
-                            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Free");
-                        else if (Player.Valid && Item.OwnerId == Player.Id)
-                            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Mine");
-                        else
-                            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%u", Item.OwnerId);
-
-                        ImGui::TableSetColumnIndex(5);
-                        char PickBtn[32];
-                        StringUtils::Format(PickBtn, sizeof(PickBtn), "Pick##%u", Item.WorldId);
-                        if (ImGui::Button(PickBtn, ImVec2(-1.0f, 0.0f)))
-                        {
-                            GroundItemManager::PickUp(Item.WorldId);
-                        }
-
-                        ImGui::TableSetColumnIndex(6);
-                        char ItemBtn[32];
-                        StringUtils::Format(ItemBtn, sizeof(ItemBtn), "Walk##I%u", Item.WorldId);
-                        if (ImGui::Button(ItemBtn, ImVec2(-1.0f, 0.0f)))
-                        {
-                            NavigationManager::WalkTo(Item.Position, Item.Name, 1.5f);
-                        }
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderInventoryWindow()
-    {
-        const auto& Items = InventoryManager::GetItems();
-        U32 ItemCount = Items.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 535.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(480.0f, 250.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Player Inventory"))
-        {
-            ImGui::Text("Itens no Inventário: %u", ItemCount);
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("InventoryTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("Bolsa", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-                ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Nome", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Qtd", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Tipo", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-                ImGui::TableSetupColumn("Consumível", ImGuiTableColumnFlags_WidthFixed, 75.0f);
-                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableHeadersRow();
-
-                for (U32 i = 0; i < ItemCount; ++i)
-                {
-                    const auto& Item = Items[i];
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("Bolsa %u", Item.Bag);
-
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%u", Item.Slot);
-
-                    ImGui::TableSetColumnIndex(2);
-                    if (Item.IsConsumable)
-                    {
-                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", Item.Name);
-                    }
-                    else
-                    {
-                        ImGui::Text("%s", Item.Name);
-                    }
-
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%u", Item.Count);
-
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("[%u-%u]", Item.Type, Item.TypeId);
-
-                    ImGui::TableSetColumnIndex(5);
-                    if (Item.IsConsumable)
-                    {
-                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "Sim");
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("Não");
-                    }
-
-                    ImGui::TableSetColumnIndex(6);
-                    if (Item.IsConsumable)
-                    {
-                        char btnId[32];
-                        StringUtils::Format(btnId, sizeof(btnId), "Usar##%u_%u", Item.Bag, Item.Slot);
-                        if (ImGui::SmallButton(btnId))
-                        {
-                            InventoryManager::UseItem(Item.Bag, Item.Slot);
-                        }
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderQuestsWindow()
-    {
-        const FixedList<ActiveQuest, 16>& Quests = QuestManager::GetActiveQuests();
-        U32 QuestCount = Quests.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 565.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(590.0f, 240.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Active Quests & Waypoints"))
-        {
-            ImGui::Checkbox("Draw Waypoint Lines to Quest Destinations", &QuestWaypointsEnabled);
-            ImGui::SameLine();
-            ImGui::TextDisabled("| Active: %u", QuestCount);
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("QuestsTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-                ImGui::TableSetupColumn("Quest Title", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Objective Progress", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-                ImGui::TableSetupColumn("Turn-In Target", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-                ImGui::TableSetupColumn("Distance", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-                ImGui::TableSetupColumn("Nav", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-                ImGui::TableHeadersRow();
-
-                if (QuestCount == 0)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(1); ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No active quests");
-                    ImGui::TableSetColumnIndex(2); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(3); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(4); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(5); ImGui::Text("-");
-                }
-                else
-                {
-                    for (U32 I = 0; I < QuestCount; ++I)
-                    {
-                        const ActiveQuest& Q = Quests[I];
-                        ImGui::TableNextRow();
-
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::Text("%u", Q.QuestId);
-
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "%s", Q.Title);
-
-                        ImGui::TableSetColumnIndex(2);
-                        if (Q.ObjectiveCount == 0 && Q.ItemObjectiveCount == 0)
-                        {
-                            ImGui::Text("Talk to NPC");
-                        }
-                        else
-                        {
-                            char ObjText[160] = { 0 };
-                            for (U32 O = 0; O < Q.ObjectiveCount; ++O)
-                            {
-                                char SingleObj[64];
-                                StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u%s",
-                                    Q.Objectives[O].TargetMobName,
-                                    Q.Objectives[O].CurrentCount,
-                                    Q.Objectives[O].CountNeeded,
-                                    (O + 1 < Q.ObjectiveCount || Q.ItemObjectiveCount > 0) ? ", " : "");
-                                StringUtils::Copy(ObjText + StringUtils::Length(ObjText), SingleObj, sizeof(ObjText) - StringUtils::Length(ObjText));
-                            }
-                            for (U32 O = 0; O < Q.ItemObjectiveCount; ++O)
-                            {
-                                char SingleObj[96];
-                                if (Q.ItemObjectives[O].DroppedByMobName[0] != '\0')
-                                {
-                                    StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u (%s)%s",
-                                        Q.ItemObjectives[O].ItemName,
-                                        Q.ItemObjectives[O].CurrentCount,
-                                        Q.ItemObjectives[O].CountNeeded,
-                                        Q.ItemObjectives[O].DroppedByMobName,
-                                        O + 1 < Q.ItemObjectiveCount ? ", " : "");
-                                }
-                                else
-                                {
-                                    StringUtils::Format(SingleObj, sizeof(SingleObj), "%s: %u/%u%s",
-                                        Q.ItemObjectives[O].ItemName,
-                                        Q.ItemObjectives[O].CurrentCount,
-                                        Q.ItemObjectives[O].CountNeeded,
-                                        O + 1 < Q.ItemObjectiveCount ? ", " : "");
-                                }
-                                StringUtils::Copy(ObjText + StringUtils::Length(ObjText), SingleObj, sizeof(ObjText) - StringUtils::Length(ObjText));
-                            }
-                            ImGui::Text("%s", ObjText);
-                        }
-
-                        ImGui::TableSetColumnIndex(3);
-                        ImGui::Text("%s", Q.DestinationName);
-
-                        ImGui::TableSetColumnIndex(4);
-                        if (Q.HasDestination)
-                            ImGui::Text("%.1fm", Q.Distance);
-                        else
-                            ImGui::Text("-");
-
-                        ImGui::TableSetColumnIndex(5);
-                        bool HasIncompleteHunt = false;
-                        U16 IncompleteMobId = 0;
-                        for (U32 O = 0; O < Q.ObjectiveCount; ++O)
-                        {
-                            if (!Q.Objectives[O].Completed)
-                            {
-                                HasIncompleteHunt = true;
-                                IncompleteMobId = Q.Objectives[O].TargetMobId;
-                                break;
-                            }
-                        }
-
-                        bool HasIncompleteItem = false;
-                        U8 IncompleteItemType = 0;
-                        U8 IncompleteItemTypeId = 0;
-                        U16 DropMobId = 0;
-                        char DropMobName[64] = { 0 };
-                        for (U32 O = 0; O < Q.ItemObjectiveCount; ++O)
-                        {
-                            if (!Q.ItemObjectives[O].Completed)
-                            {
-                                HasIncompleteItem = true;
-                                IncompleteItemType = Q.ItemObjectives[O].ItemType;
-                                IncompleteItemTypeId = Q.ItemObjectives[O].ItemTypeId;
-                                DropMobId = Q.ItemObjectives[O].DroppedByMobId;
-                                StringUtils::Copy(DropMobName, Q.ItemObjectives[O].DroppedByMobName, sizeof(DropMobName));
-                                break;
-                            }
-                        }
-
-                        // Priority 1: If item is dropped on the ground nearby -> [To Item]
-                        bool FoundGroundItem = false;
-                        Vector3 GroundItemPos;
-                        char GroundItemName[64];
-                        if (HasIncompleteItem)
-                        {
-                            const FixedList<GroundItem, 128>& GroundItems = GroundItemManager::GetGroundItems();
-                            F32 BestItemDist = 99999.0f;
-                            for (U32 G = 0; G < GroundItems.GetCount(); ++G)
-                            {
-                                const GroundItem& GI = GroundItems[G];
-                                if (GI.Type == IncompleteItemType && GI.TypeId == IncompleteItemTypeId && GI.Distance < BestItemDist)
-                                {
-                                    BestItemDist = GI.Distance;
-                                    GroundItemPos = GI.Position;
-                                    StringUtils::Copy(GroundItemName, GI.Name, sizeof(GroundItemName));
-                                    FoundGroundItem = true;
-                                }
-                            }
-                        }
-
-                        if (FoundGroundItem)
-                        {
-                            char BtnLabel[32];
-                            StringUtils::Format(BtnLabel, sizeof(BtnLabel), "To Item##Q%u", Q.QuestId);
-                            if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
-                            {
-                                NavigationManager::WalkTo(GroundItemPos, GroundItemName, 1.5f);
-                            }
-                        }
-                        else if (HasIncompleteHunt || (HasIncompleteItem && (DropMobId > 0 || DropMobName[0] != '\0')))
-                        {
-                            U16 TargetMobId = HasIncompleteHunt ? IncompleteMobId : DropMobId;
-                            const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
-                            F32 BestDist = 99999.0f;
-                            Vector3 BestPos;
-                            char BestName[64] = "Quest Mob";
-                            bool FoundMob = false;
-                            for (U32 M = 0; M < Mobs.GetCount(); ++M)
-                            {
-                                const MonsterEntity& Mob = Mobs[M];
-                                bool Match = (TargetMobId > 0 && Mob.MobId == TargetMobId);
-                                if (!Match && DropMobName[0] != '\0')
-                                {
-                                    Match = StringUtils::ContainsNormalized(Mob.Name, DropMobName);
-                                }
-                                if (Mob.Alive && Match && Mob.Distance < BestDist)
-                                {
-                                    BestDist = Mob.Distance;
-                                    BestPos = Mob.Position;
-                                    StringUtils::Copy(BestName, Mob.Name, sizeof(BestName));
-                                    FoundMob = true;
-                                }
-                            }
-
-                            if (FoundMob)
-                            {
-                                char BtnLabel[32];
-                                StringUtils::Format(BtnLabel, sizeof(BtnLabel), "To Mob##Q%u", Q.QuestId);
-                                if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
-                                {
-                                    NavigationManager::WalkTo(BestPos, BestName, 2.0f);
-                                }
-                            }
-                            else
-                            {
-                                Vector3 CachedPos;
-                                char CachedName[64] = { 0 };
-                                if (QuestManager::GetSavedMobPosition(Q.QuestId, TargetMobId, CachedPos, CachedName, sizeof(CachedName)))
-                                {
-                                    char BtnLabel[32];
-                                    StringUtils::Format(BtnLabel, sizeof(BtnLabel), "To Mob*##Q%u", Q.QuestId);
-                                    if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
-                                    {
-                                        NavigationManager::WalkTo(CachedPos, CachedName[0] ? CachedName : "Quest Mob Area", 5.0f);
-                                    }
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::SetTooltip("Saved spawn area: %s (%.0f, %.0f)",
-                                            CachedName[0] ? CachedName : "Mob Area", CachedPos.X, CachedPos.Z);
-                                    }
-                                }
-                                else
-                                {
-                                    ImGui::TextDisabled("No Mob");
-                                    if (ImGui::IsItemHovered())
-                                    {
-                                        ImGui::SetTooltip("Waiting for mob to appear nearby to auto-record position");
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            bool FoundTurnIn = false;
-                            Vector3 TurnInPos;
-                            char NpcName[64] = "Quest NPC";
-
-                            // Priority 1: Direct destination from RadarArray for this specific quest
-                            if (Q.HasDestination)
-                            {
-                                TurnInPos = Q.DestinationPos;
-                                StringUtils::Copy(NpcName, Q.DestinationName, sizeof(NpcName));
-                                FoundTurnIn = true;
-                            }
-
-                            // Priority 2: Match from active QuestMarkers
-                            const FixedList<QuestMarker, 32>& Markers = QuestManager::GetQuestMarkers();
-                            for (U32 K = 0; K < Markers.GetCount(); ++K)
-                            {
-                                const QuestMarker& M = Markers[K];
-                                if (M.IsTurnIn)
-                                {
-                                    // Match either by QuestId or proximity to resolved DestinationPos
-                                    if (M.QuestId == Q.QuestId || (FoundTurnIn && M.Position.DistanceTo(TurnInPos) < 5.0f))
-                                    {
-                                        TurnInPos = M.Position;
-                                        StringUtils::Copy(NpcName, M.NpcName, sizeof(NpcName));
-                                        FoundTurnIn = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (FoundTurnIn)
-                            {
-                                char BtnLabel[32];
-                                StringUtils::Format(BtnLabel, sizeof(BtnLabel), "To NPC##Q%u", Q.QuestId);
-                                if (ImGui::Button(BtnLabel, ImVec2(-1.0f, 0.0f)))
-                                {
-                                    NavigationManager::WalkTo(TurnInPos, NpcName, 2.5f);
-                                }
-                            }
-                            else
-                            {
-                                ImGui::TextDisabled("-");
-                            }
-                        }
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderSkillsWindow()
-    {
-        const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
-        U32 SkillCount = Skills.GetCount();
-
-        static bool FilterOnlyLearned = true;
-
-        U32 LearnedCount = 0;
-        for (U32 I = 0; I < SkillCount; ++I)
-        {
-            if (Skills[I].IsLearned) LearnedCount++;
-        }
-
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 335.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(500.0f, 260.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Learned Skills Tracker"))
-        {
-            ImGui::Checkbox("Somente Aprendidas", &FilterOnlyLearned);
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%u/%u)", LearnedCount, SkillCount);
-            ImGui::SameLine();
-
-            AutoBuffConfig& BuffCfg = BuffManager::GetConfig();
-            ImGui::Checkbox("Auto-Buff", &BuffCfg.Enabled);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(70.0f);
-            int thresh = static_cast<int>(BuffCfg.RecastThresholdSeconds);
-            if (ImGui::SliderInt("Recast <= s", &thresh, 1, 30))
-            {
-                BuffCfg.RecastThresholdSeconds = static_cast<U32>(thresh);
-            }
-
-            U32 TargetWorldId = SkillManager::GetSelectedTargetWorldId();
-            const FixedList<MonsterEntity, 128>& Mobs = EntityManager::GetNearbyMonsters();
-            const char* TargetName = nullptr;
-            U32 TargetCurHp = 0;
-            U32 TargetMaxHp = 0;
-            if (TargetWorldId != 0)
-            {
-                for (U32 M = 0; M < Mobs.GetCount(); ++M)
-                {
-                    if (Mobs[M].WorldId == TargetWorldId)
-                    {
-                        TargetName = Mobs[M].Name;
-                        TargetCurHp = Mobs[M].CurrentHp;
-                        TargetMaxHp = Mobs[M].MaxHp;
-                        break;
-                    }
-                }
-            }
-
-            if (TargetName)
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Alvo: %s (%u/%u)", TargetName, TargetCurHp, TargetMaxHp);
-            else if (TargetWorldId != 0)
-                ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Alvo: ID 0x%08X", TargetWorldId);
-            else
-                ImGui::TextDisabled("Alvo: Nenhum (auto-alvo no mais próximo)");
-
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("SkillsTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Habilidade", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Nv", ImGuiTableColumnFlags_WidthFixed, 25.0f);
-                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableSetupColumn("Estado", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableSetupColumn("Auto", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableHeadersRow();
-
-                for (U32 I = 0; I < SkillCount; ++I)
-                {
-                    const SkillInfo& Skill = Skills[I];
-                    if (FilterOnlyLearned && !Skill.IsLearned)
-                        continue;
-
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%u", Skill.SkillId);
-
-                    ImGui::TableSetColumnIndex(1);
-                    if (!Skill.IsLearned)
-                        ImGui::TextDisabled("%s (Bloqueada)", Skill.Name);
-                    else
-                        ImGui::Text("%s", Skill.Name);
-
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%u", Skill.Level);
-
-                    ImGui::TableSetColumnIndex(3);
-                    if (Skill.IsPassive)
-                    {
-                        ImGui::TextDisabled("Passiva");
-                    }
-                    else if (Skill.CooldownDuration > 0.0f)
-                    {
-                        ImGui::Text("%.0fs", Skill.CooldownDuration);
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("0s");
-                    }
-
-                    ImGui::TableSetColumnIndex(4);
-                    if (!Skill.IsLearned)
-                    {
-                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "ARVORE");
-                    }
-                    else if (Skill.IsPassive)
-                    {
-                        ImGui::TextDisabled("PASSIVA");
-                    }
-                    else if (Skill.IsReady)
-                    {
-                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "PRONTA");
-                    }
-                    else
-                    {
-                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%.1fs", Skill.CooldownRemaining);
-                    }
-
-                    ImGui::TableSetColumnIndex(5);
-                    if (Skill.IsLearned && !Skill.IsPassive)
-                    {
-                        bool isAuto = BuffManager::IsAutoBuff(Skill.SkillId);
-                        char CheckId[32];
-                        StringUtils::Format(CheckId, sizeof(CheckId), "##AB%u", Skill.SkillId);
-                        if (ImGui::Checkbox(CheckId, &isAuto))
-                        {
-                            BuffManager::SetAutoBuff(Skill.SkillId, isAuto);
-                        }
-                        if (ImGui::IsItemHovered())
-                        {
-                            ImGui::SetTooltip(isAuto ? "Auto-Buff ATIVO (recast automático ao expirar)" : "Marcar para Auto-Buff");
-                        }
-                    }
-                    else
-                    {
-                        ImGui::TextDisabled("-");
-                    }
-
-                    ImGui::TableSetColumnIndex(6);
-                    if (!Skill.IsLearned || Skill.IsPassive)
-                    {
-                        ImGui::TextDisabled("-");
-                    }
-                    else
-                    {
-                        char BtnLabel[32];
-                        StringUtils::Format(BtnLabel, sizeof(BtnLabel), "Usar##S%u", Skill.SkillId);
-                        if (!Skill.IsReady)
-                            ImGui::BeginDisabled();
-
-                        if (ImGui::SmallButton(BtnLabel))
-                        {
-                            SkillManager::CastSkill(Skill.LearnedSlot, Skill.TargetType);
-                        }
-
-                        if (!Skill.IsReady)
-                            ImGui::EndDisabled();
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderAutoComboWindow()
+    void Menu::RenderAutoComboTab()
     {
         ComboConfig& Cfg = ComboManager::GetConfig();
         const FixedList<ComboEntry, 16>& Sequence = ComboManager::GetComboSequence();
-        U32 SeqCount = Sequence.GetCount();
+        const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
+        U32 SequenceCount = Sequence.GetCount();
 
-        ImGui::SetNextWindowPos(ImVec2(520.0f, 335.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(450.0f, 260.0f), ImGuiCond_FirstUseEver);
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Auto-Combo Execution Controls");
+        ImGui::Separator();
 
-        if (ImGui::Begin("Auto-Combo / Skill Rotation"))
+        if (ImGui::Checkbox("Enable Auto-Combo Rotation", &Cfg.Enabled))
+            ComboManager::SaveConfig();
+
+        ImGui::SameLine();
+        bool active = Cfg.Active;
+        char activeLabel[64];
+        StringUtils::Format(activeLabel, sizeof(activeLabel), "Active (Hotkey: [%c])", static_cast<char>(Cfg.Hotkey));
+        if (ImGui::Checkbox(activeLabel, &active))
         {
-            ImGui::Checkbox("Habilitar", &Cfg.Enabled);
-            ImGui::SameLine();
-            if (Cfg.Active)
-            {
-                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "[ATIVO]");
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Parar (C)"))
-                {
-                    ComboManager::SetActive(false);
-                }
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "[INATIVO]");
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Iniciar (C)"))
-                {
-                    ComboManager::SetActive(true);
-                }
-            }
-
-            ImGui::SameLine();
-            ImGui::Checkbox("Segurar Tecla", &Cfg.HoldKeyMode);
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Marcado: combe enquanto segurar a tecla 'C'.\nDesmarcado: aperte 'C' para ligar/desligar.");
-            }
-
-            ImGui::Checkbox("Auto-Target Próximo Mob", &Cfg.AutoTargetNext);
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Marcado: após matar o monstro, seleciona e ataca automaticamente o próximo.\nDesmarcado (standalone): ataca apenas o alvo selecionado manualmente.");
-            }
-
-            if (Cfg.AutoTargetNext)
-            {
-                ImGui::SameLine();
-                int filterMode = static_cast<int>(Cfg.TargetFilter);
-                ImGui::RadioButton("Todos os Mobs", &filterMode, 0);
-                ImGui::SameLine();
-                ImGui::RadioButton("Apenas Mobs de Quest", &filterMode, 1);
-                Cfg.TargetFilter = static_cast<TargetFilterMode>(filterMode);
-
-                ImGui::SetNextItemWidth(100.0f);
-                ImGui::SliderFloat("Raio de Busca", &Cfg.MaxTargetRange, 10.0f, 45.0f, "%.0fm");
-                ImGui::SameLine();
-            }
-
-            ImGui::SetNextItemWidth(90.0f);
-            int delayMs = static_cast<int>(Cfg.CastDelayMs);
-            if (ImGui::SliderInt("Delay (ms)", &delayMs, 600, 2500))
-            {
-                Cfg.CastDelayMs = static_cast<U32>(delayMs);
-            }
-
-            U32 TargetWorldId = SkillManager::GetSelectedTargetWorldId();
-            if (TargetWorldId != 0)
-            {
-                const char* TargetName = "Monstro";
-                U32 CurHp = 0, MaxHp = 0;
-                const auto& Mobs = EntityManager::GetNearbyMonsters();
-                for (U32 m = 0; m < Mobs.GetCount(); ++m)
-                {
-                    if (Mobs[m].WorldId == TargetWorldId)
-                    {
-                        TargetName = Mobs[m].Name;
-                        CurHp = Mobs[m].CurrentHp;
-                        MaxHp = Mobs[m].MaxHp;
-                        break;
-                    }
-                }
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "Alvo: %s (%u/%u)", TargetName, CurHp, MaxHp);
-            }
-            else
-            {
-                ImGui::TextDisabled("Alvo: Nenhum (selecione um monstro vivo para atacar)");
-            }
-
-            ImGui::Separator();
-
-            // Skill selector to add to rotation sequence
-            const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
-            U32 SkillCount = Skills.GetCount();
-
-            static int SelectedSkillIdx = 0;
-            char PreviewText[128] = "Selecione uma habilidade...";
-            if (SelectedSkillIdx >= 0 && SelectedSkillIdx < (int)SkillCount)
-            {
-                StringUtils::Format(PreviewText, sizeof(PreviewText), "%s (ID: %u, Slot: %u)",
-                    Skills[SelectedSkillIdx].Name, Skills[SelectedSkillIdx].SkillId, Skills[SelectedSkillIdx].LearnedSlot);
-            }
-
-            ImGui::SetNextItemWidth(250.0f);
-            if (ImGui::BeginCombo("##AddComboSkill", PreviewText))
-            {
-                for (U32 i = 0; i < SkillCount; ++i)
-                {
-                    const SkillInfo& Skill = Skills[i];
-                    if (!Skill.IsLearned || Skill.IsPassive)
-                        continue;
-
-                    char ItemLabel[128];
-                    StringUtils::Format(ItemLabel, sizeof(ItemLabel), "%s (ID: %u, Slot: %u)##Cmb%u",
-                        Skill.Name, Skill.SkillId, Skill.LearnedSlot, i);
-
-                    bool isSelected = (SelectedSkillIdx == (int)i);
-                    if (ImGui::Selectable(ItemLabel, isSelected))
-                    {
-                        SelectedSkillIdx = static_cast<int>(i);
-                    }
-                    if (isSelected)
-                        ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("+ Adicionar"))
-            {
-                if (SelectedSkillIdx >= 0 && SelectedSkillIdx < (int)SkillCount)
-                {
-                    const SkillInfo& S = Skills[SelectedSkillIdx];
-                    if (S.IsLearned && !S.IsPassive)
-                    {
-                        ComboManager::AddSkillToSequence(S.SkillId, S.Name);
-                    }
-                }
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Limpar"))
-            {
-                ComboManager::ClearSequence();
-            }
-
-            // Sequence Table
-            if (ImGui::BeginTable("ComboSeqTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 25.0f);
-                ImGui::TableSetupColumn("Habilidade", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Recarga", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableSetupColumn("Ordem", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableHeadersRow();
-
-                if (SeqCount == 0)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(1); ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Nenhuma habilidade no combo");
-                    ImGui::TableSetColumnIndex(2); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(3); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(4); ImGui::Text("-");
-                }
-                else
-                {
-                    for (U32 i = 0; i < SeqCount; ++i)
-                    {
-                        const ComboEntry& Entry = Sequence[i];
-                        ImGui::TableNextRow();
-
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::Text("%u", i + 1);
-
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::Text("%s", Entry.Name);
-
-                        ImGui::TableSetColumnIndex(2);
-                        F32 cdRem = 0.0f;
-                        bool ready = true;
-                        for (U32 s = 0; s < SkillCount; ++s)
-                        {
-                            if (Skills[s].SkillId == Entry.SkillId)
-                            {
-                                cdRem = Skills[s].CooldownRemaining;
-                                ready = Skills[s].IsReady;
-                                break;
-                            }
-                        }
-
-                        if (ready)
-                        {
-                            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "PRONTA");
-                        }
-                        else
-                        {
-                            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%.1fs", cdRem);
-                        }
-
-                        ImGui::TableSetColumnIndex(3);
-                        char UpBtn[32], DownBtn[32];
-                        StringUtils::Format(UpBtn, sizeof(UpBtn), "^##U%u", i);
-                        StringUtils::Format(DownBtn, sizeof(DownBtn), "v##D%u", i);
-
-                        if (i == 0) ImGui::BeginDisabled();
-                        if (ImGui::SmallButton(UpBtn))
-                        {
-                            ComboManager::MoveSkillUp(i);
-                        }
-                        if (i == 0) ImGui::EndDisabled();
-
-                        ImGui::SameLine();
-                        if (i + 1 >= SeqCount) ImGui::BeginDisabled();
-                        if (ImGui::SmallButton(DownBtn))
-                        {
-                            ComboManager::MoveSkillDown(i);
-                        }
-                        if (i + 1 >= SeqCount) ImGui::EndDisabled();
-
-                        ImGui::TableSetColumnIndex(4);
-                        char DelBtn[32];
-                        StringUtils::Format(DelBtn, sizeof(DelBtn), "X##R%u", i);
-                        if (ImGui::SmallButton(DelBtn))
-                        {
-                            ComboManager::RemoveSkillFromSequence(i);
-                        }
-                    }
-                }
-
-                ImGui::EndTable();
-            }
+            ComboManager::SetActive(active);
         }
-        ImGui::End();
+
+        if (ImGui::Checkbox("Hold Key Mode (Executes only while holding hotkey)", &Cfg.HoldKeyMode))
+            ComboManager::SaveConfig();
+
+        int delay = static_cast<int>(Cfg.CastDelayMs);
+        ImGui::SetNextItemWidth(220.0f);
+        if (ImGui::SliderInt("Cast Delay (ms)", &delay, 400, 2500))
+        {
+            Cfg.CastDelayMs = static_cast<U32>(delay);
+            ComboManager::SaveConfig();
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Target Switching Options");
+
+        if (ImGui::Checkbox("Auto-Target Next Monster on Kill", &Cfg.AutoTargetNext))
+            ComboManager::SaveConfig();
+
+        const char* filterNames[] = { "All Monsters", "Quest Monsters Only" };
+        int currentFilter = static_cast<int>(Cfg.TargetFilter);
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::Combo("Target Filter", &currentFilter, filterNames, 2))
+        {
+            Cfg.TargetFilter = static_cast<TargetFilterMode>(currentFilter);
+            ComboManager::SaveConfig();
+        }
+
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("Search Range (m)", &Cfg.MaxTargetRange, 10.0f, 45.0f, "%.1fm"))
+            ComboManager::SaveConfig();
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Combo Rotation Sequence (%u/16 skills)", SequenceCount);
+
+        if (ImGui::Button("Clear Sequence"))
+            ComboManager::ClearSequence();
+
+        if (ImGui::BeginTable("ComboSequenceTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 140.0f)))
+        {
+            ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+            ImGui::TableSetupColumn("Skill Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableHeadersRow();
+
+            for (U32 i = 0; i < SequenceCount; ++i)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%u", i + 1);
+
+                ImGui::TableSetColumnIndex(1);
+                const char* displayName = Sequence[i].Name;
+                if (displayName[0] == '\0' || strncmp(displayName, "Skill #", 7) == 0)
+                {
+                    for (U32 s = 0; s < Skills.GetCount(); ++s)
+                    {
+                        if (Skills[s].SkillId == Sequence[i].SkillId && Skills[s].Name[0] != '\0')
+                        {
+                            displayName = Skills[s].Name;
+                            break;
+                        }
+                    }
+                }
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.4f, 1.0f), "%s", displayName);
+
+                ImGui::TableSetColumnIndex(2);
+                char btnUp[32], btnDown[32], btnDel[32];
+                StringUtils::Format(btnUp, sizeof(btnUp), "Up##%u", i);
+                StringUtils::Format(btnDown, sizeof(btnDown), "Down##%u", i);
+                StringUtils::Format(btnDel, sizeof(btnDel), "Del##%u", i);
+
+                if (i > 0)
+                {
+                    if (ImGui::SmallButton(btnUp)) ComboManager::MoveSkillUp(i);
+                    ImGui::SameLine();
+                }
+                if (i + 1 < SequenceCount)
+                {
+                    if (ImGui::SmallButton(btnDown)) ComboManager::MoveSkillDown(i);
+                    ImGui::SameLine();
+                }
+                if (ImGui::SmallButton(btnDel))
+                {
+                    ComboManager::RemoveSkillFromSequence(i);
+                }
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Learned Offensive Skills (Click to Add)");
+
+        if (ImGui::BeginTable("AvailableSkillsTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 140.0f)))
+        {
+            ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 50.0f);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableHeadersRow();
+
+            for (U32 i = 0; i < Skills.GetCount(); ++i)
+            {
+                const auto& S = Skills[i];
+                if (!S.IsLearned || S.IsPassive || S.TargetType != 3) continue;
+
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%u", S.SkillId);
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%s", S.Name);
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("Lv.%u", S.Level);
+
+                ImGui::TableSetColumnIndex(3);
+                char btnAdd[32];
+                StringUtils::Format(btnAdd, sizeof(btnAdd), "Add##%u", S.SkillId);
+                if (ImGui::SmallButton(btnAdd))
+                {
+                    ComboManager::AddSkillToSequence(S.SkillId, S.Name);
+                }
+            }
+            ImGui::EndTable();
+        }
     }
 
-    void Menu::RenderQuickSlotsWindow()
-    {
-        const FixedList<QuickSlotEntry, 30>& Slots = QuickSlotManager::GetSlots();
-        U32 SlotCount = Slots.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 565.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(520.0f, 240.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Quickslot Configuration"))
-        {
-            static int SelectedBar = 0;
-            ImGui::RadioButton("Bar 1", &SelectedBar, 0);
-            ImGui::SameLine();
-            ImGui::RadioButton("Bar 2", &SelectedBar, 1);
-            ImGui::SameLine();
-            ImGui::RadioButton("Bar 3", &SelectedBar, 2);
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("QuickSlotsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("Slot #", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-                ImGui::TableSetupColumn("Kind", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableSetupColumn("Target / Name", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Details", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-                ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableHeadersRow();
-
-                for (U32 I = 0; I < SlotCount; ++I)
-                {
-                    const QuickSlotEntry& Slot = Slots[I];
-                    if (Slot.BarIndex != (U32)SelectedBar)
-                        continue;
-
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("Slot %u", Slot.SlotIndex + 1);
-
-                    ImGui::TableSetColumnIndex(1);
-                    if (!Slot.Active)
-                    {
-                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "-");
-                    }
-                    else if (Slot.Type == QuickSlotType::Skill)
-                    {
-                        ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "SKILL");
-                    }
-                    else if (Slot.Type == QuickSlotType::Action)
-                    {
-                        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "ACTION");
-                    }
-                    else
-                    {
-                        ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.5f, 1.0f), "ITEM");
-                    }
-
-                    ImGui::TableSetColumnIndex(2);
-                    if (Slot.Active)
-                        ImGui::Text("%s", Slot.Name);
-                    else
-                        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "[Empty]");
-
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%s", Slot.Details);
-
-                    ImGui::TableSetColumnIndex(4);
-                    if (Slot.Active)
-                        ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "ACTIVE");
-                    else
-                        ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1.0f), "EMPTY");
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderBuffsWindow()
-    {
-        const FixedList<BuffInfo, 32>& Buffs = BuffManager::GetBuffs();
-        U32 BuffCount = Buffs.GetCount();
-
-        ImGui::SetNextWindowPos(ImVec2(540.0f, 565.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(390.0f, 240.0f), ImGuiCond_FirstUseEver);
-
-        if (ImGui::Begin("Buffs & Status Monitor"))
-        {
-            ImGui::Text("Active Status Effects: %u", BuffCount);
-            ImGui::Separator();
-
-            if (ImGui::BeginTable("BuffsTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
-            {
-                ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 55.0f);
-                ImGui::TableSetupColumn("Effect", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Lvl", ImGuiTableColumnFlags_WidthFixed, 35.0f);
-                ImGui::TableSetupColumn("Duration", ImGuiTableColumnFlags_WidthFixed, 75.0f);
-                ImGui::TableHeadersRow();
-
-                if (BuffCount == 0)
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(1); ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No active status effects");
-                    ImGui::TableSetColumnIndex(2); ImGui::Text("-");
-                    ImGui::TableSetColumnIndex(3); ImGui::Text("-");
-                }
-                else
-                {
-                    for (U32 I = 0; I < BuffCount; ++I)
-                    {
-                        const BuffInfo& Buff = Buffs[I];
-                        ImGui::TableNextRow();
-
-                        ImGui::TableSetColumnIndex(0);
-                        if (Buff.IsDebuff)
-                            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "DEBUFF");
-                        else
-                            ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "BUFF");
-
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::Text("%s", Buff.Name);
-
-                        ImGui::TableSetColumnIndex(2);
-                        ImGui::Text("%u", Buff.Level);
-
-                        ImGui::TableSetColumnIndex(3);
-                        if (Buff.DurationSeconds >= 60)
-                        {
-                            U32 Min = Buff.DurationSeconds / 60;
-                            U32 Sec = Buff.DurationSeconds % 60;
-                            ImGui::Text("%um %02us", Min, Sec);
-                        }
-                        else
-                        {
-                            ImGui::Text("%us", Buff.DurationSeconds);
-                        }
-                    }
-                }
-
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-    }
-
-    void Menu::RenderAutoHealWindow()
+    void Menu::RenderAutoHealTab()
     {
         AutoHealConfig& Cfg = HealManager::GetConfig();
 
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 795.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(520.0f, 360.0f), ImGuiCond_FirstUseEver);
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Auto-Heal & Consumable Settings");
+        ImGui::Separator();
 
-        if (ImGui::Begin("Auto-Cura (Pocoes e Alimentos)"))
+        if (ImGui::Checkbox("Enable Auto-Heal System", &Cfg.Enabled))
+            HealManager::SaveConfig();
+
+        if (HealManager::GetLastHealAction()[0] != '\0')
         {
-            if (ImGui::Checkbox("Ativar Sistema de Auto-Cura", &Cfg.Enabled))
-            {
-                HealManager::SaveConfig();
-            }
-
-            if (HealManager::GetLastHealAction()[0] != '\0')
-            {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), ">> %s", HealManager::GetLastHealAction());
-            }
-
-            ImGui::Separator();
-
-            // 1. Auto-HP
-            if (ImGui::Checkbox("Auto-HP (Vida)", &Cfg.AutoHpEnabled))
-            {
-                HealManager::SaveConfig();
-            }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(140.0f);
-            if (ImGui::SliderFloat("Usar HP <= %##hp", &Cfg.HpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
-            {
-                HealManager::SaveConfig();
-            }
-
-            // HP Item Selector Dropdown
-            FixedList<InventoryItem, 16> hpItems;
-            HealManager::GetAvailableHpItems(hpItems);
-
-            char hpPreview[64] = "Automatico (Melhor Item)";
-            if (strcmp(Cfg.SelectedHpItem, "Auto") != 0 && Cfg.SelectedHpItem[0] != '\0')
-            {
-                StringUtils::Copy(hpPreview, Cfg.SelectedHpItem, sizeof(hpPreview));
-            }
-
-            ImGui::SetNextItemWidth(260.0f);
-            if (ImGui::BeginCombo("Item de HP", hpPreview))
-            {
-                bool isAutoSelected = (strcmp(Cfg.SelectedHpItem, "Auto") == 0);
-                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
-                {
-                    StringUtils::Copy(Cfg.SelectedHpItem, "Auto", sizeof(Cfg.SelectedHpItem));
-                    HealManager::SaveConfig();
-                }
-
-                for (U32 i = 0; i < hpItems.GetCount(); ++i)
-                {
-                    char itemLabel[96];
-                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u HP) [%ux]##%u",
-                        hpItems[i].Name, hpItems[i].HpRecovery, hpItems[i].Count, i);
-
-                    bool isSelected = (strcmp(Cfg.SelectedHpItem, hpItems[i].Name) == 0);
-                    if (ImGui::Selectable(itemLabel, isSelected))
-                    {
-                        StringUtils::Copy(Cfg.SelectedHpItem, hpItems[i].Name, sizeof(Cfg.SelectedHpItem));
-                        HealManager::SaveConfig();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Testar HP Agora"))
-            {
-                HealManager::TestHealNow("HP");
-            }
-
-            InventoryItem bestHp = { 0 };
-            if (HealManager::FindBestHpItem(&bestHp))
-            {
-                ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u HP)",
-                    bestHp.Name, bestHp.Count, bestHp.Bag, bestHp.Slot, bestHp.HpRecovery);
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de HP detectado no inventario (Roma, Banana Fresca, Maca)!");
-            }
-
-            ImGui::Separator();
-
-            // 2. Auto-MP
-            if (ImGui::Checkbox("Auto-MP (Mana)", &Cfg.AutoMpEnabled))
-            {
-                HealManager::SaveConfig();
-            }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(140.0f);
-            if (ImGui::SliderFloat("Usar MP <= %##mp", &Cfg.MpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
-            {
-                HealManager::SaveConfig();
-            }
-
-            FixedList<InventoryItem, 16> mpItems;
-            HealManager::GetAvailableMpItems(mpItems);
-
-            char mpPreview[64] = "Automatico (Melhor Item)";
-            if (strcmp(Cfg.SelectedMpItem, "Auto") != 0 && Cfg.SelectedMpItem[0] != '\0')
-            {
-                StringUtils::Copy(mpPreview, Cfg.SelectedMpItem, sizeof(mpPreview));
-            }
-
-            ImGui::SetNextItemWidth(260.0f);
-            if (ImGui::BeginCombo("Item de MP", mpPreview))
-            {
-                bool isAutoSelected = (strcmp(Cfg.SelectedMpItem, "Auto") == 0);
-                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
-                {
-                    StringUtils::Copy(Cfg.SelectedMpItem, "Auto", sizeof(Cfg.SelectedMpItem));
-                    HealManager::SaveConfig();
-                }
-
-                for (U32 i = 0; i < mpItems.GetCount(); ++i)
-                {
-                    char itemLabel[96];
-                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u MP) [%ux]##%u",
-                        mpItems[i].Name, mpItems[i].MpRecovery, mpItems[i].Count, i);
-
-                    bool isSelected = (strcmp(Cfg.SelectedMpItem, mpItems[i].Name) == 0);
-                    if (ImGui::Selectable(itemLabel, isSelected))
-                    {
-                        StringUtils::Copy(Cfg.SelectedMpItem, mpItems[i].Name, sizeof(Cfg.SelectedMpItem));
-                        HealManager::SaveConfig();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Testar MP Agora"))
-            {
-                HealManager::TestHealNow("MP");
-            }
-
-            InventoryItem bestMp = { 0 };
-            if (HealManager::FindBestMpItem(&bestMp))
-            {
-                ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u MP)",
-                    bestMp.Name, bestMp.Count, bestMp.Bag, bestMp.Slot, bestMp.MpRecovery);
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de MP detectado no inventario!");
-            }
-
-            ImGui::Separator();
-
-            // 3. Auto-SP
-            if (ImGui::Checkbox("Auto-SP (Stamina)", &Cfg.AutoSpEnabled))
-            {
-                HealManager::SaveConfig();
-            }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(140.0f);
-            if (ImGui::SliderFloat("Usar SP <= %##sp", &Cfg.SpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
-            {
-                HealManager::SaveConfig();
-            }
-
-            FixedList<InventoryItem, 16> spItems;
-            HealManager::GetAvailableSpItems(spItems);
-
-            char spPreview[64] = "Automatico (Melhor Item)";
-            if (strcmp(Cfg.SelectedSpItem, "Auto") != 0 && Cfg.SelectedSpItem[0] != '\0')
-            {
-                StringUtils::Copy(spPreview, Cfg.SelectedSpItem, sizeof(spPreview));
-            }
-
-            ImGui::SetNextItemWidth(260.0f);
-            if (ImGui::BeginCombo("Item de SP", spPreview))
-            {
-                bool isAutoSelected = (strcmp(Cfg.SelectedSpItem, "Auto") == 0);
-                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
-                {
-                    StringUtils::Copy(Cfg.SelectedSpItem, "Auto", sizeof(Cfg.SelectedSpItem));
-                    HealManager::SaveConfig();
-                }
-
-                for (U32 i = 0; i < spItems.GetCount(); ++i)
-                {
-                    char itemLabel[96];
-                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u SP) [%ux]##%u",
-                        spItems[i].Name, spItems[i].SpRecovery, spItems[i].Count, i);
-
-                    bool isSelected = (strcmp(Cfg.SelectedSpItem, spItems[i].Name) == 0);
-                    if (ImGui::Selectable(itemLabel, isSelected))
-                    {
-                        StringUtils::Copy(Cfg.SelectedSpItem, spItems[i].Name, sizeof(Cfg.SelectedSpItem));
-                        HealManager::SaveConfig();
-                    }
-                }
-                ImGui::EndCombo();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button("Testar SP Agora"))
-            {
-                HealManager::TestHealNow("SP");
-            }
-
-            InventoryItem bestSp = { 0 };
-            if (HealManager::FindBestSpItem(&bestSp))
-            {
-                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u SP)",
-                    bestSp.Name, bestSp.Count, bestSp.Bag, bestSp.Slot, bestSp.SpRecovery);
-            }
-            else
-            {
-                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de SP detectado no inventario!");
-            }
-
-            ImGui::Separator();
-
-            int cd = static_cast<int>(Cfg.PotionCooldownMs);
-            ImGui::SetNextItemWidth(180.0f);
-            if (ImGui::SliderInt("Cooldown entre Pocoes (ms)", &cd, 300, 3000))
-            {
-                Cfg.PotionCooldownMs = static_cast<U32>(cd);
-                HealManager::SaveConfig();
-            }
+            ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), ">> %s", HealManager::GetLastHealAction());
         }
-        ImGui::End();
+
+        int cd = static_cast<int>(Cfg.PotionCooldownMs);
+        ImGui::SetNextItemWidth(180.0f);
+        if (ImGui::SliderInt("Potion Cooldown (ms)", &cd, 300, 3000))
+        {
+            Cfg.PotionCooldownMs = static_cast<U32>(cd);
+            HealManager::SaveConfig();
+        }
+
+        ImGui::Separator();
+        // 1. Auto-HP
+        if (ImGui::Checkbox("Auto-HP (Health)", &Cfg.AutoHpEnabled))
+            HealManager::SaveConfig();
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);
+        if (ImGui::SliderFloat("Use HP <= %##hp", &Cfg.HpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            HealManager::SaveConfig();
+
+        FixedList<InventoryItem, 16> hpItems;
+        HealManager::GetAvailableHpItems(hpItems);
+
+        char hpPreview[64] = "Automatic (Best Item)";
+        if (strcmp(Cfg.SelectedHpItem, "Auto") != 0 && Cfg.SelectedHpItem[0] != '\0')
+            StringUtils::Copy(hpPreview, Cfg.SelectedHpItem, sizeof(hpPreview));
+
+        ImGui::SetNextItemWidth(260.0f);
+        if (ImGui::BeginCombo("HP Potion Item", hpPreview))
+        {
+            bool isAuto = (strcmp(Cfg.SelectedHpItem, "Auto") == 0);
+            if (ImGui::Selectable("Automatic (Best Item)", isAuto))
+            {
+                StringUtils::Copy(Cfg.SelectedHpItem, "Auto", sizeof(Cfg.SelectedHpItem));
+                HealManager::SaveConfig();
+            }
+            for (U32 i = 0; i < hpItems.GetCount(); ++i)
+            {
+                char label[96];
+                StringUtils::Format(label, sizeof(label), "%s (+%u HP) [%ux]##%u",
+                    hpItems[i].Name, hpItems[i].HpRecovery, hpItems[i].Count, i);
+                bool sel = (strcmp(Cfg.SelectedHpItem, hpItems[i].Name) == 0);
+                if (ImGui::Selectable(label, sel))
+                {
+                    StringUtils::Copy(Cfg.SelectedHpItem, hpItems[i].Name, sizeof(Cfg.SelectedHpItem));
+                    HealManager::SaveConfig();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Test HP Now"))
+            HealManager::TestHealNow("HP");
+
+        InventoryItem bestHp = { 0 };
+        if (HealManager::FindBestHpItem(&bestHp))
+            ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "  -> Selected: %s (%ux in stock) [Bag %u, Slot %u] (+%u HP)",
+                bestHp.Name, bestHp.Count, bestHp.Bag, bestHp.Slot, bestHp.HpRecovery);
+        else
+            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> No HP recovery item found in inventory!");
+
+        ImGui::Separator();
+        // 2. Auto-MP
+        if (ImGui::Checkbox("Auto-MP (Mana)", &Cfg.AutoMpEnabled))
+            HealManager::SaveConfig();
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);
+        if (ImGui::SliderFloat("Use MP <= %##mp", &Cfg.MpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            HealManager::SaveConfig();
+
+        FixedList<InventoryItem, 16> mpItems;
+        HealManager::GetAvailableMpItems(mpItems);
+
+        char mpPreview[64] = "Automatic (Best Item)";
+        if (strcmp(Cfg.SelectedMpItem, "Auto") != 0 && Cfg.SelectedMpItem[0] != '\0')
+            StringUtils::Copy(mpPreview, Cfg.SelectedMpItem, sizeof(mpPreview));
+
+        ImGui::SetNextItemWidth(260.0f);
+        if (ImGui::BeginCombo("MP Potion Item", mpPreview))
+        {
+            bool isAuto = (strcmp(Cfg.SelectedMpItem, "Auto") == 0);
+            if (ImGui::Selectable("Automatic (Best Item)", isAuto))
+            {
+                StringUtils::Copy(Cfg.SelectedMpItem, "Auto", sizeof(Cfg.SelectedMpItem));
+                HealManager::SaveConfig();
+            }
+            for (U32 i = 0; i < mpItems.GetCount(); ++i)
+            {
+                char label[96];
+                StringUtils::Format(label, sizeof(label), "%s (+%u MP) [%ux]##%u",
+                    mpItems[i].Name, mpItems[i].MpRecovery, mpItems[i].Count, i);
+                bool sel = (strcmp(Cfg.SelectedMpItem, mpItems[i].Name) == 0);
+                if (ImGui::Selectable(label, sel))
+                {
+                    StringUtils::Copy(Cfg.SelectedMpItem, mpItems[i].Name, sizeof(Cfg.SelectedMpItem));
+                    HealManager::SaveConfig();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Test MP Now"))
+            HealManager::TestHealNow("MP");
+
+        InventoryItem bestMp = { 0 };
+        if (HealManager::FindBestMpItem(&bestMp))
+            ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "  -> Selected: %s (%ux in stock) [Bag %u, Slot %u] (+%u MP)",
+                bestMp.Name, bestMp.Count, bestMp.Bag, bestMp.Slot, bestMp.MpRecovery);
+        else
+            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> No MP recovery item found in inventory!");
+
+        ImGui::Separator();
+        // 3. Auto-SP
+        if (ImGui::Checkbox("Auto-SP (Stamina)", &Cfg.AutoSpEnabled))
+            HealManager::SaveConfig();
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(150.0f);
+        if (ImGui::SliderFloat("Use SP <= %##sp", &Cfg.SpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            HealManager::SaveConfig();
+
+        FixedList<InventoryItem, 16> spItems;
+        HealManager::GetAvailableSpItems(spItems);
+
+        char spPreview[64] = "Automatic (Best Item)";
+        if (strcmp(Cfg.SelectedSpItem, "Auto") != 0 && Cfg.SelectedSpItem[0] != '\0')
+            StringUtils::Copy(spPreview, Cfg.SelectedSpItem, sizeof(spPreview));
+
+        ImGui::SetNextItemWidth(260.0f);
+        if (ImGui::BeginCombo("SP Potion Item", spPreview))
+        {
+            bool isAuto = (strcmp(Cfg.SelectedSpItem, "Auto") == 0);
+            if (ImGui::Selectable("Automatic (Best Item)", isAuto))
+            {
+                StringUtils::Copy(Cfg.SelectedSpItem, "Auto", sizeof(Cfg.SelectedSpItem));
+                HealManager::SaveConfig();
+            }
+            for (U32 i = 0; i < spItems.GetCount(); ++i)
+            {
+                char label[96];
+                StringUtils::Format(label, sizeof(label), "%s (+%u SP) [%ux]##%u",
+                    spItems[i].Name, spItems[i].SpRecovery, spItems[i].Count, i);
+                bool sel = (strcmp(Cfg.SelectedSpItem, spItems[i].Name) == 0);
+                if (ImGui::Selectable(label, sel))
+                {
+                    StringUtils::Copy(Cfg.SelectedSpItem, spItems[i].Name, sizeof(Cfg.SelectedSpItem));
+                    HealManager::SaveConfig();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Test SP Now"))
+            HealManager::TestHealNow("SP");
+
+        InventoryItem bestSp = { 0 };
+        if (HealManager::FindBestSpItem(&bestSp))
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  -> Selected: %s (%ux in stock) [Bag %u, Slot %u] (+%u SP)",
+                bestSp.Name, bestSp.Count, bestSp.Bag, bestSp.Slot, bestSp.SpRecovery);
+        else
+            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> No SP recovery item found in inventory!");
+    }
+
+    void Menu::RenderAutoLootTab()
+    {
+        AutoLootConfig& Cfg = GroundItemManager::GetConfig();
+        const FixedList<GroundItem, 128>& Items = GroundItemManager::GetGroundItems();
+        U32 ItemCount = Items.GetCount();
+
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Auto-Loot Configuration");
+        ImGui::Separator();
+
+        ImGui::Checkbox("Enable Auto-Loot", &Cfg.Enabled);
+        ImGui::SameLine();
+        ImGui::Checkbox("Only My Drops (Free or Player Owned)", &Cfg.OnlyMyDrops);
+
+        ImGui::Checkbox("Auto-Walk to Drops", &Cfg.AutoWalkToLoot);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160.0f);
+        ImGui::SliderFloat("Pickup Radius (m)", &Cfg.PickupRadius, 1.0f, 35.0f, "%.1fm");
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Nearby Ground Items (%u)", ItemCount);
+
+        if (ImGui::BeginTable("GroundItemsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 320.0f)))
+        {
+            ImGui::TableSetupColumn("Item Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+            ImGui::TableSetupColumn("Distance", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("Owner", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableHeadersRow();
+
+            for (U32 i = 0; i < ItemCount; ++i)
+            {
+                const auto& item = Items[i];
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", item.Name);
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%u", item.Count);
+
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%.1fm", item.Distance);
+
+                ImGui::TableSetColumnIndex(3);
+                if (item.OwnerId == 0)
+                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "Free");
+                else if (item.OwnerId == EntityManager::GetLocalPlayer().Id)
+                    ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Mine");
+                else
+                    ImGui::TextDisabled("Other (%u)", item.OwnerId);
+
+                ImGui::TableSetColumnIndex(4);
+                char btnPick[32], btnWalk[32];
+                StringUtils::Format(btnPick, sizeof(btnPick), "Pick##%u", item.WorldId);
+                StringUtils::Format(btnWalk, sizeof(btnWalk), "Walk##%u", item.WorldId);
+
+                if (ImGui::SmallButton(btnPick))
+                {
+                    GroundItemManager::PickUp(item.WorldId);
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton(btnWalk))
+                {
+                    NavigationManager::WalkTo(item.Position, item.Name, 1.5f);
+                }
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    void Menu::RenderAutoBuffTab()
+    {
+        AutoBuffConfig& Cfg = BuffManager::GetConfig();
+        const FixedList<SkillInfo, 64>& Skills = SkillManager::GetSkills();
+
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Auto-Buff Configuration");
+        ImGui::Separator();
+
+        ImGui::Checkbox("Enable Auto-Buff System", &Cfg.Enabled);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160.0f);
+        int threshold = static_cast<int>(Cfg.RecastThresholdSeconds);
+        if (ImGui::SliderInt("Recast Threshold (Sec)", &threshold, 1, 30))
+        {
+            Cfg.RecastThresholdSeconds = static_cast<U32>(threshold);
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Learned Self-Buffs (Auto-Recast List)");
+
+        if (ImGui::BeginTable("BuffsTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 320.0f)))
+        {
+            ImGui::TableSetupColumn("Skill Name", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+            ImGui::TableSetupColumn("Auto-Recast", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("Active Status", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableHeadersRow();
+
+            for (U32 i = 0; i < Skills.GetCount(); ++i)
+            {
+                const auto& S = Skills[i];
+                if (!S.IsLearned || S.IsPassive || (S.TargetType != 0 && S.TargetType != 2 && S.TargetType != 8)) continue;
+
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%s", S.Name);
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("Lv.%u", S.Level);
+
+                ImGui::TableSetColumnIndex(2);
+                bool isAuto = BuffManager::IsAutoBuff(S.SkillId);
+                char chkId[32];
+                StringUtils::Format(chkId, sizeof(chkId), "##autobuff_%u", S.SkillId);
+                if (ImGui::Checkbox(chkId, &isAuto))
+                {
+                    BuffManager::SetAutoBuff(S.SkillId, isAuto);
+                }
+
+                ImGui::TableSetColumnIndex(3);
+                U32 remSeconds = 0;
+                if (BuffManager::HasBuff(S.SkillId, &remSeconds))
+                {
+                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.3f, 1.0f), "Active (%us)", remSeconds);
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Expired");
+                }
+
+                ImGui::TableSetColumnIndex(4);
+                char btnCast[32];
+                StringUtils::Format(btnCast, sizeof(btnCast), "Cast##%u", S.SkillId);
+                if (ImGui::SmallButton(btnCast))
+                {
+                    BuffManager::CastBuff(S.LearnedSlot);
+                }
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    void Menu::RenderGrindBotTab()
+    {
+        GrindBotConfig& Cfg = GrindBot::GetConfig();
+        const GrindBotStats& Stats = GrindBot::GetStats();
+
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Autonomous Grind Bot Controller");
+        ImGui::Separator();
+
+        bool botActive = Cfg.Enabled;
+        if (ImGui::Checkbox("Enable Grind Bot", &botActive))
+        {
+            GrindBot::ToggleActive();
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("Current State: ");
+        ImGui::SameLine();
+        ImVec4 stateColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+        if (GrindBot::GetState() == GrindBotState::Combat) stateColor = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+        else if (GrindBot::GetState() == GrindBotState::Looting) stateColor = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
+        else if (GrindBot::GetState() == GrindBotState::Approaching) stateColor = ImVec4(0.2f, 0.8f, 1.0f, 1.0f);
+        else if (GrindBot::GetState() == GrindBotState::Resting) stateColor = ImVec4(0.9f, 0.4f, 0.9f, 1.0f);
+        ImGui::TextColored(stateColor, "[%s]", GrindBot::GetStateName());
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Patrol & Anchor Area");
+
+        if (Cfg.HasAnchor)
+        {
+            ImGui::Text("Anchor Location: X: %.1f | Y: %.1f | Z: %.1f",
+                Cfg.AnchorPosition.X, Cfg.AnchorPosition.Y, Cfg.AnchorPosition.Z);
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "No Anchor Set (Uses current player position when started)");
+        }
+
+        const auto& player = EntityManager::GetLocalPlayer();
+        if (player.Valid)
+        {
+            if (ImGui::Button("Set Current Position as Anchor"))
+            {
+                GrindBot::SetAnchor(player.Position);
+            }
+            ImGui::SameLine();
+        }
+        if (ImGui::Button("Clear Anchor"))
+        {
+            GrindBot::ClearAnchor();
+        }
+
+        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SliderFloat("Leash Radius (m)", &Cfg.LeashRadius, 15.0f, 100.0f, "%.1fm");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SliderFloat("Combat Approach Range (m)", &Cfg.CombatApproachDistance, 5.0f, 30.0f, "%.1fm");
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Safety & Filters");
+
+        ImGui::Checkbox("Hunt Quest Monsters Only", &Cfg.QuestMonstersOnly);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(160.0f);
+        ImGui::SliderFloat("Rest & Heal if HP <= %", &Cfg.RestHpThresholdPercent, 15.0f, 70.0f, "%.0f%%");
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.3f, 0.8f, 1.0f, 1.0f), "Session Statistics");
+
+        ImGui::Text("Monsters Killed: %u", Stats.MonstersKilled);
+
+        U32 elapsedSec = (Stats.SessionStartTick > 0) ? (GetTickCount() - Stats.SessionStartTick) / 1000 : 0;
+        U32 hours = elapsedSec / 3600;
+        U32 minutes = (elapsedSec % 3600) / 60;
+        U32 seconds = elapsedSec % 60;
+        ImGui::Text("Session Time: %02u:%02u:%02u", hours, minutes, seconds);
+
+        if (ImGui::Button("Reset Session Stats"))
+        {
+            GrindBot::ResetStats();
+        }
     }
 
     void Menu::RenderGroundItemSnaplines()

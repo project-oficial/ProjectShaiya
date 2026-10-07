@@ -265,7 +265,7 @@ namespace ShaiyaOverlay
                 if (Offsets.LoginPtr && Memory::ReadSafe(Offsets.LoginPtr, &candidate) && candidate)
                 {
                     U32 sig = 0;
-                    if (Memory::ReadSafe(candidate + 35624, &sig) && sig == 1139802112)
+                    if (Memory::ReadSafe(candidate + Offsets.LoginCandidateSigOffset, &sig) && sig == 1139802112)
                     {
                         pLogin = candidate;
                         break;
@@ -282,17 +282,17 @@ namespace ShaiyaOverlay
             {
                 // Defocus text boxes (focus = 2) so engine render loop doesn't wipe our buffers
                 U8 noFocus = 2;
-                Memory::WriteSafe(pLogin + 1576, noFocus);
+                Memory::WriteSafe(pLogin + Offsets.LoginDefocusOffset, noFocus);
 
-                // Write Username buffer at pLogin + 8 (35 bytes)
+                // Write Username buffer at pLogin + 0x08 (35 bytes)
                 char userBuf[35] = { 0 };
                 StringUtils::Copy(userBuf, Config.Username, sizeof(userBuf));
-                Memory::WriteBytesSafe(pLogin + 8, userBuf, sizeof(userBuf));
+                Memory::WriteBytesSafe(pLogin + 0x08, userBuf, sizeof(userBuf));
 
-                // Write Password buffer at pLogin + 43 (35 bytes)
+                // Write Password buffer at pLogin + 0x2B (35 bytes)
                 char passBuf[35] = { 0 };
                 StringUtils::Copy(passBuf, Config.Password, sizeof(passBuf));
-                Memory::WriteBytesSafe(pLogin + 43, passBuf, sizeof(passBuf));
+                Memory::WriteBytesSafe(pLogin + 0x2B, passBuf, sizeof(passBuf));
 
                 // Also write directly to pNet buffers as a safety net
                 if (Offsets.NetworkPtr)
@@ -300,8 +300,8 @@ namespace ShaiyaOverlay
                     U64 pNet = 0;
                     if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
                     {
-                        Memory::WriteBytesSafe(pNet + 3864, userBuf, sizeof(userBuf));
-                        Memory::WriteBytesSafe(pNet + 3899, passBuf, sizeof(passBuf));
+                        Memory::WriteBytesSafe(pNet + Offsets.NetworkUserBuffer, userBuf, sizeof(userBuf));
+                        Memory::WriteBytesSafe(pNet + Offsets.NetworkPassBuffer, passBuf, sizeof(passBuf));
                     }
                 }
 
@@ -345,7 +345,7 @@ namespace ShaiyaOverlay
                 U64 pNet = 0;
                 if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
                 {
-                    Memory::ReadSafe(pNet + 3856, &ServerCount);
+                    Memory::ReadSafe(pNet + Offsets.NetworkServerCount, &ServerCount);
                     if (ServerCount > 0)
                         break;
                 }
@@ -362,12 +362,12 @@ namespace ShaiyaOverlay
         if (Offsets.LoginPtr)
             Memory::ReadSafe(Offsets.LoginPtr, &pLogin);
 
-        U64 pSelectServer = pLogin ? (pLogin + 1584) : 0;
+        U64 pSelectServer = pLogin ? (pLogin + Offsets.SelectServerOffset) : 0;
         if (pSelectServer)
         {
-            *reinterpret_cast<U32*>(pSelectServer + 6368) = Config.ServerIndex;
-            *reinterpret_cast<U32*>(pSelectServer + 14568) = Config.ServerIndex;
-            *reinterpret_cast<U8*>(pSelectServer + 1128) = 1;
+            *reinterpret_cast<U32*>(pSelectServer + Offsets.SelectServerIndexOffset1) = Config.ServerIndex;
+            *reinterpret_cast<U32*>(pSelectServer + Offsets.SelectServerIndexOffset2) = Config.ServerIndex;
+            *reinterpret_cast<U8*>(pSelectServer + Offsets.SelectServerActiveFlag) = 1;
         }
 
         // Signal Enter via both KeyBuffer and PostMessage (ensures background operation works)
@@ -431,12 +431,12 @@ namespace ShaiyaOverlay
                 if (Memory::ReadSafe(Offsets.NetworkPtr, &pNet) && pNet)
                 {
                     U32 CharId = 0;
-                    Memory::ReadSafe(pNet + TargetSlot * 0x2E0 + 0x14, &CharId);
+                    Memory::ReadSafe(pNet + TargetSlot * Offsets.NetworkCharStride + 0x14, &CharId);
                     if (CharId == 0)
                     {
                         for (U32 s = 0; s < 5; ++s)
                         {
-                            Memory::ReadSafe(pNet + s * 0x2E0 + 0x14, &CharId);
+                            Memory::ReadSafe(pNet + s * Offsets.NetworkCharStride + 0x14, &CharId);
                             if (CharId != 0)
                             {
                                 TargetSlot = s;
@@ -466,19 +466,18 @@ namespace ShaiyaOverlay
                 }
 
                 // Set selected slot field
-                *reinterpret_cast<U32*>(pCharSelect + 0x40) = TargetSlot;
+                *reinterpret_cast<U32*>(pCharSelect + Offsets.CharSelectSlotBase) = TargetSlot;
 
                 // Set slot button check state
-                *reinterpret_cast<U8*>(pCharSelect + 0x51)   = (TargetSlot == 0) ? 1 : 0;
-                *reinterpret_cast<U8*>(pCharSelect + 0xA91)  = (TargetSlot == 1) ? 1 : 0;
-                *reinterpret_cast<U8*>(pCharSelect + 0x14D1) = (TargetSlot == 2) ? 1 : 0;
-                *reinterpret_cast<U8*>(pCharSelect + 0x1F11) = (TargetSlot == 3) ? 1 : 0;
-                *reinterpret_cast<U8*>(pCharSelect + 0x2951) = (TargetSlot == 4) ? 1 : 0;
+                for (U32 s = 0; s < 5; ++s)
+                {
+                    *reinterpret_cast<U8*>(pCharSelect + Offsets.CharSelectSlotBtnBase + s * Offsets.CharSelectSlotBtnStride) = (TargetSlot == s) ? 1 : 0;
+                }
 
                 Sleep(200);
 
-                // Set StartGame flag (0xB338 = 1) - triggers native enter world packet flow!
-                *reinterpret_cast<U8*>(pCharSelect + 0xB338) = 1;
+                // Set StartGame flag - triggers native enter world packet flow!
+                *reinterpret_cast<U8*>(pCharSelect + Offsets.CharSelectStartGameFlag) = 1;
                 Logger::Info("[AutoLogin] Triggered world entry for slot %u (0xB338 = 1)!", TargetSlot);
             }
         }

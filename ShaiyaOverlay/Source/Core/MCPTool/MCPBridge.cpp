@@ -272,8 +272,8 @@ namespace ShaiyaOverlay
                 if (Offsets.CameraEye)
                 {
                     Memory::ReadSafe(Offsets.CameraEye, &camEye.X);
-                    Memory::ReadSafe(Offsets.CameraEye + 4, &camEye.Y);
-                    Memory::ReadSafe(Offsets.CameraEye + 8, &camEye.Z);
+                    Memory::ReadSafe(Offsets.CameraEye + 0x04, &camEye.Y);
+                    Memory::ReadSafe(Offsets.CameraEye + 0x08, &camEye.Z);
                 }
 
                 sprintf_s(pResponse, nMaxLen,
@@ -1216,13 +1216,14 @@ namespace ShaiyaOverlay
                 sanitize_string(s.Name, safeName, sizeof(safeName));
 
                 int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
-                    "%s{\"id\":%u,\"level\":%u,\"name\":\"%s\",\"learned\":%s,\"passive\":%s,\"ready\":%s,\"slot\":%u,\"cooldown\":%.1f,\"duration\":%.1f}",
+                    "%s{\"id\":%u,\"level\":%u,\"name\":\"%s\",\"learned\":%s,\"passive\":%s,\"ready\":%s,\"slot\":%u,\"target_type\":%u,\"cooldown\":%.1f,\"duration\":%.1f}",
                     (i > 0) ? "," : "",
                     s.SkillId, s.Level, safeName,
                     s.IsLearned ? "true" : "false",
                     s.IsPassive ? "true" : "false",
                     s.IsReady ? "true" : "false",
                     s.LearnedSlot,
+                    s.TargetType,
                     s.CooldownRemaining,
                     s.CooldownDuration
                 );

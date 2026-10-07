@@ -133,6 +133,9 @@
     <ClInclude Include="Source\Game\Combat\HealManager.h">
       <Filter>Source\Game\Combat</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Game\Bot\GrindBot.h">
+      <Filter>Source\Game</Filter>
+    </ClInclude>
     <ClInclude Include="Source\UI\Renderer.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
@@ -230,6 +233,9 @@
     </ClCompile>
     <ClCompile Include="Source\Game\Combat\HealManager.cpp">
       <Filter>Source\Game\Combat</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Bot\GrindBot.cpp">
+      <Filter>Source\Game</Filter>
     </ClCompile>
     <ClCompile Include="Source\UI\Renderer.cpp">
       <Filter>Source\UI</Filter>

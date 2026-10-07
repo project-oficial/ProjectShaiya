@@ -50,13 +50,13 @@ namespace ShaiyaOverlay
         static bool IsActive() { return Config.Active; }
 
         static ComboConfig& GetConfig() { return Config; }
+        static void SaveConfig();
 
         static void HandleHotkeyState(bool KeyDown);
         static U32 FindNextMonsterTarget();
 
     private:
         static void LoadConfig();
-        static void SaveConfig();
         static bool ExecuteNextSkill();
 
         static FixedList<ComboEntry, 16> Sequence;

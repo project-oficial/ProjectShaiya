@@ -15,16 +15,14 @@ namespace ShaiyaOverlay
         static void SetQuestWaypointsEnabled(bool enabled) { QuestWaypointsEnabled = enabled; }
 
     private:
-        static void RenderOverviewWindow();
-        static void RenderEntitiesWindow();
-        static void RenderGroundItemsWindow();
-        static void RenderInventoryWindow();
-        static void RenderSkillsWindow();
-        static void RenderQuickSlotsWindow();
-        static void RenderQuestsWindow();
-        static void RenderBuffsWindow();
-        static void RenderAutoComboWindow();
-        static void RenderAutoHealWindow();
+        static void RenderMainWindow();
+        static void RenderStatusTab();
+        static void RenderAutoComboTab();
+        static void RenderAutoHealTab();
+        static void RenderAutoLootTab();
+        static void RenderAutoBuffTab();
+        static void RenderGrindBotTab();
+
         static void RenderGroundItemSnaplines();
         static void RenderQuestWaypoints();
 

@@ -744,7 +744,10 @@ namespace ShaiyaOverlay
         LastPacketTick = 0;
 
         if (TargetName && TargetName[0] != '\0')
+        {
             StringUtils::Copy(DestinationName, TargetName, sizeof(DestinationName));
+            StringUtils::NormalizeAccents(DestinationName, sizeof(DestinationName), false);
+        }
         else
             StringUtils::Format(DestinationName, sizeof(DestinationName), "Pos (%.0f, %.0f)", TargetPos.X, TargetPos.Z);
 
@@ -1057,25 +1060,25 @@ namespace ShaiyaOverlay
 
             // Primary CameraEye
             *reinterpret_cast<F32*>(Offsets.CameraEye) = EyeX;
-            *reinterpret_cast<F32*>(Offsets.CameraEye + 8) = EyeZ;
+            *reinterpret_cast<F32*>(Offsets.CameraEye + 0x08) = EyeZ;
 
             // Secondary CameraEye (immediately follows ProjMatrix 4x4)
             if (Offsets.ProjMatrix)
             {
-                U64 CamEye2 = Offsets.ProjMatrix + 0x40;
+                U64 CamEye2 = Offsets.ProjMatrix + Offsets.CameraSecondaryEyeOffset;
                 *reinterpret_cast<F32*>(CamEye2) = EyeX;
-                *reinterpret_cast<F32*>(CamEye2 + 8) = EyeZ;
+                *reinterpret_cast<F32*>(CamEye2 + 0x08) = EyeZ;
             }
         }
 
         // Set direction vectors in LocalPlayer
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x60) = DirX;
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x64) = 0.0f;
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x68) = DirZ;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirX) = DirX;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirY) = 0.0f;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirZ) = DirZ;
 
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x338) = DirX;
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x33C) = 0.0f;
-        *reinterpret_cast<F32*>(LocalPlayerPtr + 0x340) = DirZ;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirX) = DirX;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirY) = 0.0f;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirZ) = DirZ;
 
         // Ensure keydown is maintained directly in memory buffer and via PostMessage fallback
         if (Offsets.KeyBuffer)

@@ -17,9 +17,9 @@ namespace ShaiyaOverlay
         U64 BucketsPtr = 0;
         U64 Mask = 0;
 
-        if (!Memory::ReadSafe(Offsets.ItemDb + 34 * 8, &NilNode)) return false;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 36 * 8, &BucketsPtr)) return false;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 39 * 8, &Mask)) return false;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x22 * 8, &NilNode)) return false;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x24 * 8, &BucketsPtr)) return false;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x27 * 8, &Mask)) return false;
 
         U64 H1 = (static_cast<U64>(MobId & 0xFF) ^ 0xCBF29CE484222325ULL) * 0x100000001B3ULL;
         U64 H2 = ((static_cast<U64>(MobId) >> 8) ^ H1) * 0x8A97B0004E7FEABULL;
@@ -27,26 +27,27 @@ namespace ShaiyaOverlay
 
         U64 FirstInBucket = 0;
         U64 BucketEntry = 0;
-        if (!Memory::ReadSafe(BucketsPtr + Bucket * 16, &FirstInBucket)) return false;
-        if (!Memory::ReadSafe(BucketsPtr + Bucket * 16 + 8, &BucketEntry)) return false;
+        if (!Memory::ReadSafe(BucketsPtr + Bucket * 0x10, &FirstInBucket)) return false;
+        if (!Memory::ReadSafe(BucketsPtr + Bucket * 0x10 + 0x08, &BucketEntry)) return false;
 
         U64 Node = BucketEntry;
         if (Node != NilNode)
         {
             U32 Key = 0;
-            Memory::ReadSafe(Node + 16, &Key);
+            Memory::ReadSafe(Node + 0x10, &Key);
             if (Key == MobId)
             {
                 U64 NamePtr = 0;
-                Memory::ReadSafe(Node + 24, &NamePtr);
+                Memory::ReadSafe(Node + 0x18, &NamePtr);
                 if (OutLevel)
-                    Memory::ReadSafe(Node + 24 + 10, OutLevel);
+                    Memory::ReadSafe(Node + 0x18 + 0x0A, OutLevel);
                 if (NamePtr)
                 {
                     char Temp[64] = { 0 };
                     if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                     {
-                        StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                        StringUtils::Copy(OutName, Temp, MaxLen);
+                        StringUtils::NormalizeAccents(OutName, MaxLen, false);
                         return true;
                     }
                 }
@@ -56,20 +57,21 @@ namespace ShaiyaOverlay
             U32 Walk = 0;
             while (Node != FirstInBucket && Walk < 64)
             {
-                if (!Memory::ReadSafe(Node + 8, &Node) || !Node) break;
-                Memory::ReadSafe(Node + 16, &Key);
+                if (!Memory::ReadSafe(Node + 0x08, &Node) || !Node) break;
+                Memory::ReadSafe(Node + 0x10, &Key);
                 if (Key == MobId)
                 {
                     U64 NamePtr = 0;
-                    Memory::ReadSafe(Node + 24, &NamePtr);
+                    Memory::ReadSafe(Node + 0x18, &NamePtr);
                     if (OutLevel)
-                        Memory::ReadSafe(Node + 24 + 10, OutLevel);
+                        Memory::ReadSafe(Node + 0x18 + 0x0A, OutLevel);
                     if (NamePtr)
                     {
                         char Temp[64] = { 0 };
                         if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
                         {
-                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                            StringUtils::Copy(OutName, Temp, MaxLen);
+                            StringUtils::NormalizeAccents(OutName, MaxLen, false);
                             return true;
                         }
                     }
@@ -92,11 +94,11 @@ namespace ShaiyaOverlay
             return false;
 
         U64 Size = 0;
-        if (!Memory::ReadSafe(Offsets.QuestMobSet + 8, &Size) || Size == 0)
+        if (!Memory::ReadSafe(Offsets.QuestMobSet + 0x08, &Size) || Size == 0)
             return false;
 
         U64 RootNode = 0;
-        if (!Memory::ReadSafe(HeadNode + 8, &RootNode) || !RootNode || RootNode == HeadNode)
+        if (!Memory::ReadSafe(HeadNode + 0x08, &RootNode) || !RootNode || RootNode == HeadNode)
             return false;
 
         U64 Curr = RootNode;
@@ -104,12 +106,12 @@ namespace ShaiyaOverlay
         while (Curr && Curr != HeadNode && Depth++ < 64)
         {
             U8 IsNil = 1;
-            Memory::ReadSafe(Curr + 25, &IsNil);
+            Memory::ReadSafe(Curr + 0x19, &IsNil);
             if (IsNil != 0)
                 break;
 
             U32 Key = 0;
-            if (!Memory::ReadSafe(Curr + 28, &Key))
+            if (!Memory::ReadSafe(Curr + 0x1C, &Key))
                 break;
 
             if (MobId == Key)
@@ -118,7 +120,7 @@ namespace ShaiyaOverlay
             if (MobId < Key)
                 Memory::ReadSafe(Curr, &Curr); // _Left
             else
-                Memory::ReadSafe(Curr + 16, &Curr); // _Right
+                Memory::ReadSafe(Curr + 0x10, &Curr); // _Right
         }
 
         return false;
@@ -140,9 +142,9 @@ namespace ShaiyaOverlay
         U64 BucketsPtr = 0;
         U64 Mask = 0;
 
-        if (!Memory::ReadSafe(Offsets.ItemDb + 34 * 8, &NilNode)) return 0;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 36 * 8, &BucketsPtr)) return 0;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 39 * 8, &Mask)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x22 * 8, &NilNode)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x24 * 8, &BucketsPtr)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x27 * 8, &Mask)) return 0;
 
         U32 BucketCount = static_cast<U32>(Mask + 1);
         if (BucketCount > 16384) BucketCount = 16384;
@@ -151,8 +153,8 @@ namespace ShaiyaOverlay
         {
             U64 FirstInBucket = 0;
             U64 BucketEntry = 0;
-            if (!Memory::ReadSafe(BucketsPtr + B * 16, &FirstInBucket)) continue;
-            if (!Memory::ReadSafe(BucketsPtr + B * 16 + 8, &BucketEntry)) continue;
+            if (!Memory::ReadSafe(BucketsPtr + B * 0x10, &FirstInBucket)) continue;
+            if (!Memory::ReadSafe(BucketsPtr + B * 0x10 + 0x08, &BucketEntry)) continue;
 
             U64 Node = BucketEntry;
             U32 Walk = 0;
@@ -161,9 +163,9 @@ namespace ShaiyaOverlay
                 U32 Key = 0;
                 U16 DropVal = 0;
                 U64 NamePtr = 0;
-                Memory::ReadSafe(Node + 16, &Key);
-                Memory::ReadSafe(Node + 24, &NamePtr);
-                Memory::ReadSafe(Node + 24 + 44, &DropVal);
+                Memory::ReadSafe(Node + 0x10, &Key);
+                Memory::ReadSafe(Node + 0x18, &NamePtr);
+                Memory::ReadSafe(Node + 0x18 + 0x2C, &DropVal);
 
                 if (DropVal == TargetDropVal && Key > 0)
                 {
@@ -171,13 +173,16 @@ namespace ShaiyaOverlay
                     {
                         char Temp[64] = { 0 };
                         if (Memory::ReadBytesSafe(NamePtr, Temp, sizeof(Temp) - 1))
-                            StringUtils::AnsiToUtf8(Temp, OutName, MaxLen);
+                        {
+                            StringUtils::Copy(OutName, Temp, MaxLen);
+                            StringUtils::NormalizeAccents(OutName, MaxLen, false);
+                        }
                     }
                     return static_cast<U16>(Key);
                 }
 
                 if (Node == FirstInBucket) break;
-                if (!Memory::ReadSafe(Node + 8, &Node)) break;
+                if (!Memory::ReadSafe(Node + 0x08, &Node)) break;
                 ++Walk;
             }
         }
@@ -194,9 +199,9 @@ namespace ShaiyaOverlay
         U64 BucketsPtr = 0;
         U64 Mask = 0;
 
-        if (!Memory::ReadSafe(Offsets.ItemDb + 34 * 8, &NilNode)) return 0;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 36 * 8, &BucketsPtr)) return 0;
-        if (!Memory::ReadSafe(Offsets.ItemDb + 39 * 8, &Mask)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x22 * 8, &NilNode)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x24 * 8, &BucketsPtr)) return 0;
+        if (!Memory::ReadSafe(Offsets.ItemDb + 0x27 * 8, &Mask)) return 0;
 
         U32 BucketCount = static_cast<U32>(Mask + 1);
         if (BucketCount > 16384) BucketCount = 16384;
@@ -205,8 +210,8 @@ namespace ShaiyaOverlay
         {
             U64 FirstInBucket = 0;
             U64 BucketEntry = 0;
-            if (!Memory::ReadSafe(BucketsPtr + B * 16, &FirstInBucket)) continue;
-            if (!Memory::ReadSafe(BucketsPtr + B * 16 + 8, &BucketEntry)) continue;
+            if (!Memory::ReadSafe(BucketsPtr + B * 0x10, &FirstInBucket)) continue;
+            if (!Memory::ReadSafe(BucketsPtr + B * 0x10 + 0x08, &BucketEntry)) continue;
 
             U64 Node = BucketEntry;
             U32 Walk = 0;
@@ -214,8 +219,8 @@ namespace ShaiyaOverlay
             {
                 U32 Key = 0;
                 U64 NamePtr = 0;
-                Memory::ReadSafe(Node + 16, &Key);
-                Memory::ReadSafe(Node + 24, &NamePtr);
+                Memory::ReadSafe(Node + 0x10, &Key);
+                Memory::ReadSafe(Node + 0x18, &NamePtr);
 
                 if (NamePtr && Key > 0)
                 {
@@ -225,14 +230,17 @@ namespace ShaiyaOverlay
                         if (StringUtils::Length(Temp) >= 3 && StringUtils::ContainsNormalized(Temp, NameQuery))
                         {
                             if (OutFullName && MaxLen > 0)
+                            {
                                 StringUtils::Copy(OutFullName, Temp, MaxLen);
+                                StringUtils::NormalizeAccents(OutFullName, MaxLen, false);
+                            }
                             return static_cast<U16>(Key);
                         }
                     }
                 }
 
                 if (Node == FirstInBucket) break;
-                if (!Memory::ReadSafe(Node + 8, &Node)) break;
+                if (!Memory::ReadSafe(Node + 0x08, &Node)) break;
                 ++Walk;
             }
         }

@@ -89,6 +89,9 @@ namespace ShaiyaOverlay
         U32 PlayerDestX;
         U32 PlayerDestY;
         U32 PlayerDestZ;
+        U32 PlayerMoveDirX;
+        U32 PlayerMoveDirY;
+        U32 PlayerMoveDirZ;
         U32 PlayerState;
         U32 PlayerIdOffset;
         U32 PlayerTargetWorldId;
@@ -104,6 +107,56 @@ namespace ShaiyaOverlay
         U32 ItemTypeId;
         U32 ItemCount;
         U32 ItemQuality;
+
+        // Inventory offsets
+        U32 PlayerInventoryBagsOffset;
+        U32 InventorySlotStride;
+
+        // ItemDb & ItemRecord offsets
+        U32 ItemDbSkillMapBaseOffset;
+        U32 ItemRecordHpRecovery;
+        U32 ItemRecordMpRecovery;
+        U32 ItemRecordSpRecovery;
+        U32 SkillRecordCategory;
+        U32 SkillRecordTargetType;
+        U32 SkillRecordBaseCooldown;
+        U32 SkillInnerMaskOffset;
+        U32 SkillNodeTargetType;
+        U32 SkillNodeBaseCooldown;
+
+        // MainUI Buff Vector offsets
+        U32 MainUIBuffVectorFirst;
+        U32 MainUIBuffVectorLast;
+
+        // Quest offsets
+        U32 QuestTextRecordStride;
+        U32 QuestTextItemTypeSlot1;
+        U32 QuestTextMobHunt1;
+        U32 QuestTextMobHunt1Count;
+        U32 QuestTextMobHunt2;
+        U32 QuestTextMobHunt2Count;
+        U32 QuestTextEndNpcType;
+        U32 QuestTextEndNpcId;
+        U32 NpcFileRecordStride;
+
+        // Camera offsets
+        U32 CameraSecondaryEyeOffset;
+
+        // AutoLogin offsets
+        U32 LoginCandidateSigOffset;
+        U32 LoginDefocusOffset;
+        U32 SelectServerOffset;
+        U32 SelectServerIndexOffset1;
+        U32 SelectServerIndexOffset2;
+        U32 SelectServerActiveFlag;
+        U32 NetworkUserBuffer;
+        U32 NetworkPassBuffer;
+        U32 NetworkServerCount;
+        U32 NetworkCharStride;
+        U32 CharSelectSlotBase;
+        U32 CharSelectSlotBtnBase;
+        U32 CharSelectSlotBtnStride;
+        U32 CharSelectStartGameFlag;
 
         static bool Initialize();
     };

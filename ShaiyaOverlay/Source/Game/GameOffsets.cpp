@@ -46,6 +46,9 @@ namespace ShaiyaOverlay
         Offsets.PlayerDestX        = 0x32C;
         Offsets.PlayerDestY        = 0x330;
         Offsets.PlayerDestZ        = 0x334;
+        Offsets.PlayerMoveDirX     = 0x338;
+        Offsets.PlayerMoveDirY     = 0x33C;
+        Offsets.PlayerMoveDirZ     = 0x340;
         Offsets.PlayerState        = 0x2B4;
         Offsets.PlayerIdOffset     = 0x78;
         Offsets.PlayerTargetWorldId = 0x344;
@@ -61,6 +64,56 @@ namespace ShaiyaOverlay
         Offsets.ItemTypeId         = 0x6D;
         Offsets.ItemCount          = 0x70;
         Offsets.ItemQuality        = 0x75;
+
+        // Inventory offsets
+        Offsets.PlayerInventoryBagsOffset = 0x4471;
+        Offsets.InventorySlotStride        = 0x84;
+
+        // ItemDb & ItemRecord offsets
+        Offsets.ItemDbSkillMapBaseOffset      = 0x88;
+        Offsets.ItemRecordHpRecovery          = 0x40;
+        Offsets.ItemRecordMpRecovery          = 0x42;
+        Offsets.ItemRecordSpRecovery          = 0x44;
+        Offsets.SkillRecordCategory           = 0x1A;
+        Offsets.SkillRecordTargetType         = 0x4C;
+        Offsets.SkillRecordBaseCooldown       = 0x40;
+        Offsets.SkillInnerMaskOffset          = 0x48;
+        Offsets.SkillNodeTargetType           = 0x64;
+        Offsets.SkillNodeBaseCooldown         = 0x58;
+
+        // MainUI Buff Vector offsets
+        Offsets.MainUIBuffVectorFirst = 0x48;
+        Offsets.MainUIBuffVectorLast  = 0x50;
+
+        // Quest offsets
+        Offsets.QuestTextRecordStride  = 0x1E8;
+        Offsets.QuestTextItemTypeSlot1 = 0x60;
+        Offsets.QuestTextMobHunt1      = 0x6A;
+        Offsets.QuestTextMobHunt1Count = 0x6E;
+        Offsets.QuestTextMobHunt2      = 0x6C;
+        Offsets.QuestTextMobHunt2Count = 0x6F;
+        Offsets.QuestTextEndNpcType    = 0x5C;
+        Offsets.QuestTextEndNpcId      = 0x5E;
+        Offsets.NpcFileRecordStride    = 0x220;
+
+        // Camera offsets
+        Offsets.CameraSecondaryEyeOffset = 0x40;
+
+        // AutoLogin offsets
+        Offsets.LoginCandidateSigOffset  = 0x8B28;
+        Offsets.LoginDefocusOffset       = 0x628;
+        Offsets.SelectServerOffset       = 0x630;
+        Offsets.SelectServerIndexOffset1 = 0x18E0;
+        Offsets.SelectServerIndexOffset2 = 0x38E8;
+        Offsets.SelectServerActiveFlag   = 0x468;
+        Offsets.NetworkUserBuffer        = 0xF18;
+        Offsets.NetworkPassBuffer        = 0xF3B;
+        Offsets.NetworkServerCount       = 0xF10;
+        Offsets.NetworkCharStride        = 0x2E0;
+        Offsets.CharSelectSlotBase       = 0x40;
+        Offsets.CharSelectSlotBtnBase    = 0x51;
+        Offsets.CharSelectSlotBtnStride  = 0xA40;
+        Offsets.CharSelectStartGameFlag  = 0xB338;
 
         // 1. WorldManager
         U64 MatchWorld = PatternScanner::ScanModule(nullptr, "48 8D 0D ? ? ? ? E8 ? ? ? ? 41 B8 09 00 00 00 48 8D 15");
@@ -82,16 +135,16 @@ namespace ShaiyaOverlay
         U64 MatchHudVitals = PatternScanner::ScanModule(nullptr, "8B 0D ? ? ? ? 89 8B 14 03 00 00 8B 05");
         if (MatchHudVitals)
         {
-            // MatchHudVitals (+0x0): dword_140A12F34 is Current HP, -4 is Level, +4 is Current MP, +8 is Current SP
+            // MatchHudVitals (+0x00): dword_140A12F34 is Current HP, -0x04 is Level, +0x04 is Current MP, +0x08 is Current SP
             Offsets.PlayerCurrentHp = PatternScanner::RipRelative(MatchHudVitals, 2, 6);
-            Offsets.PlayerLevel     = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp - 4) : 0;
-            Offsets.PlayerCurrentMp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 4) : 0;
-            Offsets.PlayerCurrentSp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 8) : 0;
+            Offsets.PlayerLevel     = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp - 0x04) : 0;
+            Offsets.PlayerCurrentMp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 0x04) : 0;
+            Offsets.PlayerCurrentSp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 0x08) : 0;
 
-            // MatchHudVitals (+0x32): qword_140A07960 is Max HP, +4 is Max MP, +8 is Max SP
+            // MatchHudVitals (+0x32): qword_140A07960 is Max HP, +0x04 is Max MP, +0x08 is Max SP
             Offsets.PlayerMaxHp     = PatternScanner::RipRelative(MatchHudVitals + 0x32, 2, 6);
-            Offsets.PlayerMaxMp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 4) : 0;
-            Offsets.PlayerMaxSp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 8) : 0;
+            Offsets.PlayerMaxMp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 0x04) : 0;
+            Offsets.PlayerMaxSp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 0x08) : 0;
 
             Logger::Info("  PlayerCurrentHp : 0x%llX", Offsets.PlayerCurrentHp);
             Logger::Info("  PlayerMaxHp     : 0x%llX", Offsets.PlayerMaxHp);

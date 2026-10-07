@@ -12,9 +12,9 @@ namespace ShaiyaOverlay
         Vector3 Eye, At, Up;
         if (!Memory::ReadBytesSafe(Offsets.CameraEye, &Eye, sizeof(Vector3)))
             return false;
-        if (!Memory::ReadBytesSafe(Offsets.CameraEye + 12, &At, sizeof(Vector3)))
+        if (!Memory::ReadBytesSafe(Offsets.CameraEye + 0x0C, &At, sizeof(Vector3)))
             return false;
-        if (!Memory::ReadBytesSafe(Offsets.CameraEye + 24, &Up, sizeof(Vector3)))
+        if (!Memory::ReadBytesSafe(Offsets.CameraEye + 0x18, &Up, sizeof(Vector3)))
             return false;
 
         Matrix4x4 Proj;

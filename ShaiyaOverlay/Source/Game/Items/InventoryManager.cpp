@@ -41,15 +41,15 @@ namespace ShaiyaOverlay
         if (!Offsets.PlayerInventory)
             return;
 
-        // Player inventory bags start at +17521 in PlayerInventory block
+        // Player inventory bags start at PlayerInventoryBagsOffset in PlayerInventory block
         // 5 bags, each having 48 slots (48 * 132 bytes = 6336 bytes per bag)
-        U64 SlotStart = Offsets.PlayerInventory + 17521;
+        U64 SlotStart = Offsets.PlayerInventory + Offsets.PlayerInventoryBagsOffset;
 
         constexpr U32 TotalSlots = 240; // 5 bags * 48 slots
         for (U32 I = 0; I < TotalSlots; ++I)
         {
             U8 Data[4] = { 0 };
-            if (!Memory::ReadBytesSafe(SlotStart + I * 132, Data, 3))
+            if (!Memory::ReadBytesSafe(SlotStart + I * Offsets.InventorySlotStride, Data, 3))
                 continue;
 
             U8 Type = Data[0];
@@ -72,6 +72,7 @@ namespace ShaiyaOverlay
             {
                 StringUtils::Format(Item.Name, sizeof(Item.Name), "Item [%u-%u]", Type, TypeId);
             }
+            StringUtils::NormalizeAccents(Item.Name, sizeof(Item.Name), false);
 
             if (Offsets.GetItemRecordAddr && Offsets.ItemDb)
             {
@@ -82,9 +83,9 @@ namespace ShaiyaOverlay
                     U64 RecPtr = Fn(Offsets.ItemDb, Type, static_cast<U32>(TypeId));
                     if (RecPtr)
                     {
-                        Memory::ReadSafe(RecPtr + 64, &Item.HpRecovery);
-                        Memory::ReadSafe(RecPtr + 66, &Item.MpRecovery);
-                        Memory::ReadSafe(RecPtr + 68, &Item.SpRecovery);
+                        Memory::ReadSafe(RecPtr + Offsets.ItemRecordHpRecovery, &Item.HpRecovery);
+                        Memory::ReadSafe(RecPtr + Offsets.ItemRecordMpRecovery, &Item.MpRecovery);
+                        Memory::ReadSafe(RecPtr + Offsets.ItemRecordSpRecovery, &Item.SpRecovery);
                     }
                 }
                 __except (EXCEPTION_EXECUTE_HANDLER) {}

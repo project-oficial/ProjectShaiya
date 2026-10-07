@@ -127,6 +127,7 @@
     <ClInclude Include="Source\Game\Combat\RiskCalculator.h" />
     <ClInclude Include="Source\Game\Combat\ComboManager.h" />
     <ClInclude Include="Source\Game\Combat\HealManager.h" />
+    <ClInclude Include="Source\Game\Bot\GrindBot.h" />
     <ClInclude Include="Source\UI\Renderer.h" />
     <ClInclude Include="Source\UI\Menu.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imconfig.h" />
@@ -164,6 +165,7 @@
     <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp" />
     <ClCompile Include="Source\Game\Combat\ComboManager.cpp" />
     <ClCompile Include="Source\Game\Combat\HealManager.cpp" />
+    <ClCompile Include="Source\Game\Bot\GrindBot.cpp" />
     <ClCompile Include="Source\UI\Renderer.cpp" />
     <ClCompile Include="Source\UI\Menu.cpp" />
     <ClCompile Include="Source\ThirdParty\ImGui\imgui.cpp" />
