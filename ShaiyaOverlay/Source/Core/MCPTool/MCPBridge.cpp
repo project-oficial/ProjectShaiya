@@ -13,6 +13,7 @@
 #include "Game/Skills/SkillManager.h"
 #include "Game/Buffs/BuffManager.h"
 #include "Game/Combat/ComboManager.h"
+#include "Game/Combat/HealManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "UI/Menu.h"
 
@@ -779,6 +780,86 @@ namespace ShaiyaOverlay
                 cfg.MaxTargetRange);
         }
 
+        static void HandleUseItem(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            double dBag = 0, dSlot = 0;
+            if (!extract_json_double(pRequest, "bag", dBag) || !extract_json_double(pRequest, "slot", dSlot))
+            {
+                sprintf_s(pResponse, nMaxLen, "{\"status\":\"error\",\"message\":\"missing bag or slot parameter\"}");
+                return;
+            }
+
+            U8 bag = static_cast<U8>(dBag);
+            U8 slot = static_cast<U8>(dSlot);
+
+            bool ok = InventoryManager::UseItem(bag, slot);
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"%s\",\"action\":\"use_item\",\"bag\":%u,\"slot\":%u}",
+                ok ? "ok" : "error", bag, slot);
+        }
+
+        static void HandleGetAutoHeal(char* pResponse, size_t nMaxLen)
+        {
+            const auto& cfg = HealManager::GetConfig();
+            InventoryItem hpItem = { 0 };
+            InventoryItem mpItem = { 0 };
+            InventoryItem spItem = { 0 };
+            bool hasHp = HealManager::FindBestHpItem(&hpItem);
+            bool hasMp = HealManager::FindBestMpItem(&mpItem);
+            bool hasSp = HealManager::FindBestSpItem(&spItem);
+
+            char safeHp[64] = { 0 }, safeMp[64] = { 0 }, safeSp[64] = { 0 };
+            sanitize_string(hasHp ? hpItem.Name : "none", safeHp, sizeof(safeHp));
+            sanitize_string(hasMp ? mpItem.Name : "none", safeMp, sizeof(safeMp));
+            sanitize_string(hasSp ? spItem.Name : "none", safeSp, sizeof(safeSp));
+
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"config\":{\"enabled\":%s,\"auto_hp\":%s,\"hp_threshold\":%.1f,"
+                "\"auto_mp\":%s,\"mp_threshold\":%.1f,\"auto_sp\":%s,\"sp_threshold\":%.1f,\"cooldown_ms\":%u},"
+                "\"detected_items\":{\"hp\":\"%s\",\"hp_count\":%u,\"hp_bag\":%u,\"hp_slot\":%u,"
+                "\"mp\":\"%s\",\"mp_count\":%u,\"mp_bag\":%u,\"mp_slot\":%u,"
+                "\"sp\":\"%s\",\"sp_count\":%u,\"sp_bag\":%u,\"sp_slot\":%u}}",
+                cfg.Enabled ? "true" : "false",
+                cfg.AutoHpEnabled ? "true" : "false",
+                cfg.HpThresholdPercent,
+                cfg.AutoMpEnabled ? "true" : "false",
+                cfg.MpThresholdPercent,
+                cfg.AutoSpEnabled ? "true" : "false",
+                cfg.SpThresholdPercent,
+                cfg.PotionCooldownMs,
+                safeHp, hasHp ? hpItem.Count : 0, hasHp ? hpItem.Bag : 0, hasHp ? hpItem.Slot : 0,
+                safeMp, hasMp ? mpItem.Count : 0, hasMp ? mpItem.Bag : 0, hasMp ? mpItem.Slot : 0,
+                safeSp, hasSp ? spItem.Count : 0, hasSp ? spItem.Bag : 0, hasSp ? spItem.Slot : 0
+            );
+        }
+
+        static void HandleSetAutoHeal(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            auto& cfg = HealManager::GetConfig();
+            bool bVal = false;
+            double dVal = 0;
+
+            if (extract_json_bool(pRequest, "enabled", bVal))
+                cfg.Enabled = bVal;
+            if (extract_json_bool(pRequest, "auto_hp", bVal))
+                cfg.AutoHpEnabled = bVal;
+            if (extract_json_double(pRequest, "hp_threshold", dVal) && dVal >= 1.0 && dVal <= 100.0)
+                cfg.HpThresholdPercent = static_cast<F32>(dVal);
+            if (extract_json_bool(pRequest, "auto_mp", bVal))
+                cfg.AutoMpEnabled = bVal;
+            if (extract_json_double(pRequest, "mp_threshold", dVal) && dVal >= 1.0 && dVal <= 100.0)
+                cfg.MpThresholdPercent = static_cast<F32>(dVal);
+            if (extract_json_bool(pRequest, "auto_sp", bVal))
+                cfg.AutoSpEnabled = bVal;
+            if (extract_json_double(pRequest, "sp_threshold", dVal) && dVal >= 1.0 && dVal <= 100.0)
+                cfg.SpThresholdPercent = static_cast<F32>(dVal);
+            if (extract_json_double(pRequest, "cooldown_ms", dVal) && dVal >= 100.0)
+                cfg.PotionCooldownMs = static_cast<U32>(dVal);
+
+            HealManager::SaveConfig();
+            HandleGetAutoHeal(pResponse, nMaxLen);
+        }
+
         static void HandleCheckCollision(const char* pRequest, char* pResponse, size_t nMaxLen)
         {
             double sx = 0, sy = 0, sz = 0;
@@ -1169,11 +1250,12 @@ namespace ShaiyaOverlay
                 sanitize_string(item.Name, safeName, sizeof(safeName));
 
                 int itemLen = sprintf_s(itemBuf, sizeof(itemBuf),
-                    "%s{\"bag\":%u,\"slot\":%u,\"global_slot\":%u,\"type\":%u,\"type_id\":%u,\"count\":%u,\"is_consumable\":%s,\"name\":\"%s\"}",
+                    "%s{\"bag\":%u,\"slot\":%u,\"global_slot\":%u,\"type\":%u,\"type_id\":%u,\"count\":%u,\"is_consumable\":%s,\"hp_recovery\":%u,\"mp_recovery\":%u,\"sp_recovery\":%u,\"name\":\"%s\"}",
                     (i > 0) ? "," : "",
                     item.Bag, item.Slot, item.GlobalIndex,
                     item.Type, item.TypeId, item.Count,
                     item.IsConsumable ? "true" : "false",
+                    item.HpRecovery, item.MpRecovery, item.SpRecovery,
                     safeName
                 );
 
@@ -1370,6 +1452,18 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "set_autocombo") == 0)
             {
                 HandleSetAutoCombo(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "use_item") == 0)
+            {
+                HandleUseItem(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_autoheal") == 0)
+            {
+                HandleGetAutoHeal(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "set_autoheal") == 0)
+            {
+                HandleSetAutoHeal(pRequestJson, pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "select_target") == 0)
             {

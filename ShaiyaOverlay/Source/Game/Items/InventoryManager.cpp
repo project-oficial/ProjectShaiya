@@ -6,7 +6,7 @@
 
 namespace ShaiyaOverlay
 {
-    FixedList<InventoryItem, 128> InventoryManager::Items;
+    FixedList<InventoryItem, 256> InventoryManager::Items;
 
     bool InventoryManager::IsConsumableType(U8 Type)
     {
@@ -42,9 +42,10 @@ namespace ShaiyaOverlay
             return;
 
         // Player inventory bags start at +17521 in PlayerInventory block
+        // 5 bags, each having 48 slots (48 * 132 bytes = 6336 bytes per bag)
         U64 SlotStart = Offsets.PlayerInventory + 17521;
 
-        constexpr U32 TotalSlots = 120; // 5 bags * 24 slots
+        constexpr U32 TotalSlots = 240; // 5 bags * 48 slots
         for (U32 I = 0; I < TotalSlots; ++I)
         {
             U8 Data[4] = { 0 };
@@ -59,8 +60,8 @@ namespace ShaiyaOverlay
                 continue;
 
             InventoryItem Item = { 0 };
-            Item.Bag = static_cast<U8>((I / 24) + 1);
-            Item.Slot = static_cast<U8>((I % 24) + 1);
+            Item.Bag = static_cast<U8>((I / 48) + 1);
+            Item.Slot = static_cast<U8>((I % 48) + 1);
             Item.GlobalIndex = static_cast<U8>(I);
             Item.Type = Type;
             Item.TypeId = TypeId;
@@ -72,11 +73,41 @@ namespace ShaiyaOverlay
                 StringUtils::Format(Item.Name, sizeof(Item.Name), "Item [%u-%u]", Type, TypeId);
             }
 
+            if (Offsets.GetItemRecordAddr && Offsets.ItemDb)
+            {
+                using GetItemRecordFn = U64(__fastcall*)(U64, U8, U32);
+                auto Fn = reinterpret_cast<GetItemRecordFn>(Offsets.GetItemRecordAddr);
+                __try
+                {
+                    U64 RecPtr = Fn(Offsets.ItemDb, Type, static_cast<U32>(TypeId));
+                    if (RecPtr)
+                    {
+                        Memory::ReadSafe(RecPtr + 64, &Item.HpRecovery);
+                        Memory::ReadSafe(RecPtr + 66, &Item.MpRecovery);
+                        Memory::ReadSafe(RecPtr + 68, &Item.SpRecovery);
+                    }
+                }
+                __except (EXCEPTION_EXECUTE_HANDLER) {}
+            }
+
             Items.Add(Item);
         }
     }
 
-    const FixedList<InventoryItem, 128>& InventoryManager::GetItems()
+    bool InventoryManager::UseItem(U8 Bag, U8 Slot)
+    {
+        if (!Offsets.SendUseItemAddr || Bag < 1 || Bag > 5 || Slot < 1 || Slot > 48)
+            return false;
+
+        using tSendPacketUseItem = void(__fastcall*)(U8, U8);
+        auto Fn = reinterpret_cast<tSendPacketUseItem>(Offsets.SendUseItemAddr);
+
+        // Bag is 1-based (1..5), engine Slot is 0-based (0..47)
+        Fn(Bag, Slot - 1);
+        return true;
+    }
+
+    const FixedList<InventoryItem, 256>& InventoryManager::GetItems()
     {
         return Items;
     }

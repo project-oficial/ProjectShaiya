@@ -82,14 +82,16 @@ namespace ShaiyaOverlay
         U64 MatchHudVitals = PatternScanner::ScanModule(nullptr, "8B 0D ? ? ? ? 89 8B 14 03 00 00 8B 05");
         if (MatchHudVitals)
         {
-            Offsets.PlayerMaxHp     = PatternScanner::RipRelative(MatchHudVitals, 2, 6);
-            Offsets.PlayerLevel     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp - 4) : 0;
-            Offsets.PlayerMaxMp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 4) : 0;
-            Offsets.PlayerMaxSp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 8) : 0;
-
-            Offsets.PlayerCurrentHp = PatternScanner::RipRelative(MatchHudVitals + 0x32, 2, 6);
+            // MatchHudVitals (+0x0): dword_140A12F34 is Current HP, -4 is Level, +4 is Current MP, +8 is Current SP
+            Offsets.PlayerCurrentHp = PatternScanner::RipRelative(MatchHudVitals, 2, 6);
+            Offsets.PlayerLevel     = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp - 4) : 0;
             Offsets.PlayerCurrentMp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 4) : 0;
             Offsets.PlayerCurrentSp = Offsets.PlayerCurrentHp ? (Offsets.PlayerCurrentHp + 8) : 0;
+
+            // MatchHudVitals (+0x32): qword_140A07960 is Max HP, +4 is Max MP, +8 is Max SP
+            Offsets.PlayerMaxHp     = PatternScanner::RipRelative(MatchHudVitals + 0x32, 2, 6);
+            Offsets.PlayerMaxMp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 4) : 0;
+            Offsets.PlayerMaxSp     = Offsets.PlayerMaxHp ? (Offsets.PlayerMaxHp + 8) : 0;
 
             Logger::Info("  PlayerCurrentHp : 0x%llX", Offsets.PlayerCurrentHp);
             Logger::Info("  PlayerMaxHp     : 0x%llX", Offsets.PlayerMaxHp);
@@ -413,7 +415,14 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  SendCharBuff    : FAILED (AOB not found)");
 
-        // 37. TargetType (dword_140A11F1C)
+        // 37. SendPacketUseItem (0x1403878D0)
+        Offsets.SendUseItemAddr = PatternScanner::ScanModule(nullptr, "B8 28 10 00 00 E8 ? ? ? ? 48 2B E0 B8 0A 05 00 00");
+        if (Offsets.SendUseItemAddr)
+            Logger::Info("  SendUseItem     : 0x%llX", Offsets.SendUseItemAddr);
+        else
+            Logger::Error("  SendUseItem     : FAILED (AOB not found)");
+
+        // 38. TargetType (dword_140A11F1C)
         U64 MatchTargetType = PatternScanner::ScanModule(nullptr, "89 15 ? ? ? ? 44 89 80 44 03 00 00");
         Offsets.TargetTypeAddr = MatchTargetType ? PatternScanner::RipRelative(MatchTargetType, 2, 6) : 0;
         if (Offsets.TargetTypeAddr)

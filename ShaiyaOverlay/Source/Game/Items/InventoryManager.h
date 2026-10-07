@@ -9,10 +9,11 @@ namespace ShaiyaOverlay
     {
     public:
         static void Update();
-        static const FixedList<InventoryItem, 128>& GetItems();
+        static const FixedList<InventoryItem, 256>& GetItems();
         static bool IsConsumableType(U8 Type);
+        static bool UseItem(U8 Bag, U8 Slot);
 
     private:
-        static FixedList<InventoryItem, 128> Items;
+        static FixedList<InventoryItem, 256> Items;
     };
 }

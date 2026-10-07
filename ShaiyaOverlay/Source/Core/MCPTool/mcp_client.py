@@ -303,6 +303,55 @@ def query_inventory() -> Dict[str, Any]:
     return res
 
 
+def use_item(bag: int, slot: int) -> Dict[str, Any]:
+    """Uses a consumable item from inventory (Bag 1..5, Slot 1..24) using native SendPacketUseItem."""
+    res = send_pipe_command({"cmd": "use_item", "bag": bag, "slot": slot})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def query_autoheal() -> Dict[str, Any]:
+    """Retrieves auto-heal configuration, thresholds, and detected HP/MP/SP items."""
+    res = send_pipe_command({"cmd": "get_autoheal"})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def set_autoheal(enabled: Optional[bool] = None,
+                 auto_hp: Optional[bool] = None, hp_threshold: Optional[float] = None,
+                 auto_mp: Optional[bool] = None, mp_threshold: Optional[float] = None,
+                 auto_sp: Optional[bool] = None, sp_threshold: Optional[float] = None,
+                 cooldown_ms: Optional[int] = None) -> Dict[str, Any]:
+    """Configures the Auto-Heal (Auto-Potions) system."""
+    payload = {"cmd": "set_autoheal"}
+    if enabled is not None:
+        payload["enabled"] = bool(enabled)
+    if auto_hp is not None:
+        payload["auto_hp"] = bool(auto_hp)
+    if hp_threshold is not None:
+        payload["hp_threshold"] = float(hp_threshold)
+    if auto_mp is not None:
+        payload["auto_mp"] = bool(auto_mp)
+    if mp_threshold is not None:
+        payload["mp_threshold"] = float(mp_threshold)
+    if auto_sp is not None:
+        payload["auto_sp"] = bool(auto_sp)
+    if sp_threshold is not None:
+        payload["sp_threshold"] = float(sp_threshold)
+    if cooldown_ms is not None:
+        payload["cooldown_ms"] = int(cooldown_ms)
+
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
 def query_buffs() -> Dict[str, Any]:
     """Retrieves all active player buffs and debuffs with level, duration remaining, and name."""
     res = send_pipe_command({"cmd": "get_buffs"})

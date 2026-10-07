@@ -13,6 +13,9 @@ namespace ShaiyaOverlay
         U8 TypeId;
         U8 Count;
         bool IsConsumable;
+        U16 HpRecovery;
+        U16 MpRecovery;
+        U16 SpRecovery;
         char Name[64];
     };
 }

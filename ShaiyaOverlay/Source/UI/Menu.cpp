@@ -9,6 +9,7 @@
 #include "Game/Buffs/BuffManager.h"
 #include "Game/Combat/RiskCalculator.h"
 #include "Game/Combat/ComboManager.h"
+#include "Game/Combat/HealManager.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Items/InventoryManager.h"
 #include "Game/QuickSlots/QuickSlotManager.h"
@@ -62,6 +63,7 @@ namespace ShaiyaOverlay
         QuestManager::Update();
         NavigationManager::Update();
         ComboManager::Update();
+        HealManager::Update();
 
         const PlayerData& Player = EntityManager::GetLocalPlayer();
         const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
@@ -74,6 +76,7 @@ namespace ShaiyaOverlay
         F32 BannerHeight = 75.0f;
         if (NavigationManager::IsNavigating()) BannerHeight += 20.0f;
         if (ComboManager::IsActive()) BannerHeight += 20.0f;
+        if (HealManager::GetConfig().Enabled) BannerHeight += 20.0f;
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(400.0f, BannerHeight), ImGuiCond_Always);
@@ -141,6 +144,20 @@ namespace ShaiyaOverlay
                     }
                 }
             }
+
+            if (HealManager::GetConfig().Enabled)
+            {
+                InventoryItem bestHp = { 0 };
+                if (HealManager::FindBestHpItem(&bestHp))
+                {
+                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), ">> AUTO-CURA: ATIVA (HP <= %.0f%% -> %s)",
+                        HealManager::GetConfig().HpThresholdPercent, bestHp.Name);
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), ">> AUTO-CURA: ATIVA (Sem item de HP no inventario)");
+                }
+            }
         }
         ImGui::End();
 
@@ -161,6 +178,7 @@ namespace ShaiyaOverlay
         RenderQuestsWindow();
         RenderBuffsWindow();
         RenderAutoComboWindow();
+        RenderAutoHealWindow();
     }
 
     void Menu::RenderOverviewWindow()
@@ -492,7 +510,7 @@ namespace ShaiyaOverlay
 
     void Menu::RenderInventoryWindow()
     {
-        const FixedList<InventoryItem, 128>& Items = InventoryManager::GetItems();
+        const auto& Items = InventoryManager::GetItems();
         U32 ItemCount = Items.GetCount();
 
         ImGui::SetNextWindowPos(ImVec2(10.0f, 535.0f), ImGuiCond_FirstUseEver);
@@ -503,14 +521,15 @@ namespace ShaiyaOverlay
             ImGui::Text("Itens no Inventário: %u", ItemCount);
             ImGui::Separator();
 
-            if (ImGui::BeginTable("InventoryTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
+            if (ImGui::BeginTable("InventoryTable", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
             {
                 ImGui::TableSetupColumn("Bolsa", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-                ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 35.0f);
                 ImGui::TableSetupColumn("Nome", ImGuiTableColumnFlags_WidthStretch);
-                ImGui::TableSetupColumn("Qtd", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-                ImGui::TableSetupColumn("Tipo", ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                ImGui::TableSetupColumn("Consumível", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("Qtd", ImGuiTableColumnFlags_WidthFixed, 35.0f);
+                ImGui::TableSetupColumn("Tipo", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                ImGui::TableSetupColumn("Consumível", ImGuiTableColumnFlags_WidthFixed, 75.0f);
+                ImGui::TableSetupColumn("Ação", ImGuiTableColumnFlags_WidthFixed, 50.0f);
                 ImGui::TableHeadersRow();
 
                 for (U32 i = 0; i < ItemCount; ++i)
@@ -548,6 +567,17 @@ namespace ShaiyaOverlay
                     else
                     {
                         ImGui::TextDisabled("Não");
+                    }
+
+                    ImGui::TableSetColumnIndex(6);
+                    if (Item.IsConsumable)
+                    {
+                        char btnId[32];
+                        StringUtils::Format(btnId, sizeof(btnId), "Usar##%u_%u", Item.Bag, Item.Slot);
+                        if (ImGui::SmallButton(btnId))
+                        {
+                            InventoryManager::UseItem(Item.Bag, Item.Slot);
+                        }
                     }
                 }
 
@@ -1384,6 +1414,238 @@ namespace ShaiyaOverlay
                 }
 
                 ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+    }
+
+    void Menu::RenderAutoHealWindow()
+    {
+        AutoHealConfig& Cfg = HealManager::GetConfig();
+
+        ImGui::SetNextWindowPos(ImVec2(10.0f, 795.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(520.0f, 360.0f), ImGuiCond_FirstUseEver);
+
+        if (ImGui::Begin("Auto-Cura (Pocoes e Alimentos)"))
+        {
+            if (ImGui::Checkbox("Ativar Sistema de Auto-Cura", &Cfg.Enabled))
+            {
+                HealManager::SaveConfig();
+            }
+
+            if (HealManager::GetLastHealAction()[0] != '\0')
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), ">> %s", HealManager::GetLastHealAction());
+            }
+
+            ImGui::Separator();
+
+            // 1. Auto-HP
+            if (ImGui::Checkbox("Auto-HP (Vida)", &Cfg.AutoHpEnabled))
+            {
+                HealManager::SaveConfig();
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(140.0f);
+            if (ImGui::SliderFloat("Usar HP <= %##hp", &Cfg.HpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            {
+                HealManager::SaveConfig();
+            }
+
+            // HP Item Selector Dropdown
+            FixedList<InventoryItem, 16> hpItems;
+            HealManager::GetAvailableHpItems(hpItems);
+
+            char hpPreview[64] = "Automatico (Melhor Item)";
+            if (strcmp(Cfg.SelectedHpItem, "Auto") != 0 && Cfg.SelectedHpItem[0] != '\0')
+            {
+                StringUtils::Copy(hpPreview, Cfg.SelectedHpItem, sizeof(hpPreview));
+            }
+
+            ImGui::SetNextItemWidth(260.0f);
+            if (ImGui::BeginCombo("Item de HP", hpPreview))
+            {
+                bool isAutoSelected = (strcmp(Cfg.SelectedHpItem, "Auto") == 0);
+                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
+                {
+                    StringUtils::Copy(Cfg.SelectedHpItem, "Auto", sizeof(Cfg.SelectedHpItem));
+                    HealManager::SaveConfig();
+                }
+
+                for (U32 i = 0; i < hpItems.GetCount(); ++i)
+                {
+                    char itemLabel[96];
+                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u HP) [%ux]##%u",
+                        hpItems[i].Name, hpItems[i].HpRecovery, hpItems[i].Count, i);
+
+                    bool isSelected = (strcmp(Cfg.SelectedHpItem, hpItems[i].Name) == 0);
+                    if (ImGui::Selectable(itemLabel, isSelected))
+                    {
+                        StringUtils::Copy(Cfg.SelectedHpItem, hpItems[i].Name, sizeof(Cfg.SelectedHpItem));
+                        HealManager::SaveConfig();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Testar HP Agora"))
+            {
+                HealManager::TestHealNow("HP");
+            }
+
+            InventoryItem bestHp = { 0 };
+            if (HealManager::FindBestHpItem(&bestHp))
+            {
+                ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u HP)",
+                    bestHp.Name, bestHp.Count, bestHp.Bag, bestHp.Slot, bestHp.HpRecovery);
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de HP detectado no inventario (Roma, Banana Fresca, Maca)!");
+            }
+
+            ImGui::Separator();
+
+            // 2. Auto-MP
+            if (ImGui::Checkbox("Auto-MP (Mana)", &Cfg.AutoMpEnabled))
+            {
+                HealManager::SaveConfig();
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(140.0f);
+            if (ImGui::SliderFloat("Usar MP <= %##mp", &Cfg.MpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            {
+                HealManager::SaveConfig();
+            }
+
+            FixedList<InventoryItem, 16> mpItems;
+            HealManager::GetAvailableMpItems(mpItems);
+
+            char mpPreview[64] = "Automatico (Melhor Item)";
+            if (strcmp(Cfg.SelectedMpItem, "Auto") != 0 && Cfg.SelectedMpItem[0] != '\0')
+            {
+                StringUtils::Copy(mpPreview, Cfg.SelectedMpItem, sizeof(mpPreview));
+            }
+
+            ImGui::SetNextItemWidth(260.0f);
+            if (ImGui::BeginCombo("Item de MP", mpPreview))
+            {
+                bool isAutoSelected = (strcmp(Cfg.SelectedMpItem, "Auto") == 0);
+                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
+                {
+                    StringUtils::Copy(Cfg.SelectedMpItem, "Auto", sizeof(Cfg.SelectedMpItem));
+                    HealManager::SaveConfig();
+                }
+
+                for (U32 i = 0; i < mpItems.GetCount(); ++i)
+                {
+                    char itemLabel[96];
+                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u MP) [%ux]##%u",
+                        mpItems[i].Name, mpItems[i].MpRecovery, mpItems[i].Count, i);
+
+                    bool isSelected = (strcmp(Cfg.SelectedMpItem, mpItems[i].Name) == 0);
+                    if (ImGui::Selectable(itemLabel, isSelected))
+                    {
+                        StringUtils::Copy(Cfg.SelectedMpItem, mpItems[i].Name, sizeof(Cfg.SelectedMpItem));
+                        HealManager::SaveConfig();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Testar MP Agora"))
+            {
+                HealManager::TestHealNow("MP");
+            }
+
+            InventoryItem bestMp = { 0 };
+            if (HealManager::FindBestMpItem(&bestMp))
+            {
+                ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u MP)",
+                    bestMp.Name, bestMp.Count, bestMp.Bag, bestMp.Slot, bestMp.MpRecovery);
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de MP detectado no inventario!");
+            }
+
+            ImGui::Separator();
+
+            // 3. Auto-SP
+            if (ImGui::Checkbox("Auto-SP (Stamina)", &Cfg.AutoSpEnabled))
+            {
+                HealManager::SaveConfig();
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(140.0f);
+            if (ImGui::SliderFloat("Usar SP <= %##sp", &Cfg.SpThresholdPercent, 10.0f, 95.0f, "%.0f%%"))
+            {
+                HealManager::SaveConfig();
+            }
+
+            FixedList<InventoryItem, 16> spItems;
+            HealManager::GetAvailableSpItems(spItems);
+
+            char spPreview[64] = "Automatico (Melhor Item)";
+            if (strcmp(Cfg.SelectedSpItem, "Auto") != 0 && Cfg.SelectedSpItem[0] != '\0')
+            {
+                StringUtils::Copy(spPreview, Cfg.SelectedSpItem, sizeof(spPreview));
+            }
+
+            ImGui::SetNextItemWidth(260.0f);
+            if (ImGui::BeginCombo("Item de SP", spPreview))
+            {
+                bool isAutoSelected = (strcmp(Cfg.SelectedSpItem, "Auto") == 0);
+                if (ImGui::Selectable("Automatico (Melhor Item)", isAutoSelected))
+                {
+                    StringUtils::Copy(Cfg.SelectedSpItem, "Auto", sizeof(Cfg.SelectedSpItem));
+                    HealManager::SaveConfig();
+                }
+
+                for (U32 i = 0; i < spItems.GetCount(); ++i)
+                {
+                    char itemLabel[96];
+                    StringUtils::Format(itemLabel, sizeof(itemLabel), "%s (+%u SP) [%ux]##%u",
+                        spItems[i].Name, spItems[i].SpRecovery, spItems[i].Count, i);
+
+                    bool isSelected = (strcmp(Cfg.SelectedSpItem, spItems[i].Name) == 0);
+                    if (ImGui::Selectable(itemLabel, isSelected))
+                    {
+                        StringUtils::Copy(Cfg.SelectedSpItem, spItems[i].Name, sizeof(Cfg.SelectedSpItem));
+                        HealManager::SaveConfig();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Testar SP Agora"))
+            {
+                HealManager::TestHealNow("SP");
+            }
+
+            InventoryItem bestSp = { 0 };
+            if (HealManager::FindBestSpItem(&bestSp))
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  -> Item Selecionado: %s (%ux) [Bolsa %u, Slot %u] (+%u SP)",
+                    bestSp.Name, bestSp.Count, bestSp.Bag, bestSp.Slot, bestSp.SpRecovery);
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "  -> Nenhum item de SP detectado no inventario!");
+            }
+
+            ImGui::Separator();
+
+            int cd = static_cast<int>(Cfg.PotionCooldownMs);
+            ImGui::SetNextItemWidth(180.0f);
+            if (ImGui::SliderInt("Cooldown entre Pocoes (ms)", &cd, 300, 3000))
+            {
+                Cfg.PotionCooldownMs = static_cast<U32>(cd);
+                HealManager::SaveConfig();
             }
         }
         ImGui::End();

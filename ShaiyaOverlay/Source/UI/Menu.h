@@ -24,6 +24,7 @@ namespace ShaiyaOverlay
         static void RenderQuestsWindow();
         static void RenderBuffsWindow();
         static void RenderAutoComboWindow();
+        static void RenderAutoHealWindow();
         static void RenderGroundItemSnaplines();
         static void RenderQuestWaypoints();
 

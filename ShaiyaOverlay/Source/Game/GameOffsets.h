@@ -52,6 +52,7 @@ namespace ShaiyaOverlay
         U64 GetSkillRecordAddr;
         U64 SendPickUpAddr;
         U64 SendCharBuffPacketAddr;
+        U64 SendUseItemAddr;
         U64 TargetTypeAddr;
 
         // CWorldMgr offsets
