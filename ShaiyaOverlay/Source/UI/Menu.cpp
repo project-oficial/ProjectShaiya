@@ -225,6 +225,7 @@ namespace ShaiyaOverlay
         ImGui::Text("Game State: %s (%u) | Auto-Login Status: %s",
             AutoLoginManager::GetGameStateName(State), static_cast<U8>(State), AutoLoginManager::GetStatusMessage());
 
+#ifdef TEST_MODE
         if (AutoLoginManager::IsRunning())
         {
             if (ImGui::Button("Cancel Auto-Login"))
@@ -235,6 +236,7 @@ namespace ShaiyaOverlay
             if (ImGui::Button("Run Manual Auto-Login"))
                 AutoLoginManager::Start();
         }
+#endif
 
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.65f, 0.15f, 0.15f, 1.0f));

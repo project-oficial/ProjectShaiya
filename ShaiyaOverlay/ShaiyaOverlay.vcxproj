@@ -59,7 +59,7 @@
       <SDLCheck>false</SDLCheck>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PreprocessorDefinitions>_DEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEST_MODE;_DEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(ProjectDir)Source;$(ProjectDir)Source\ThirdParty\ImGui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
@@ -79,7 +79,7 @@
       <SDLCheck>false</SDLCheck>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEST_MODE;NDEBUG;SHAIYAOVERLAY_EXPORTS;_WINDOWS;_USRDLL;MCP_TOOL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <Optimization>MaxSpeed</Optimization>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -95,100 +95,137 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Source\Core\Types.h" />
+    <ClInclude Include="Source\Config\Settings.h" />
+    <ClInclude Include="Source\Core\Camera.h" />
     <ClInclude Include="Source\Core\Logger.h" />
-    <ClInclude Include="Source\Core\StringUtils.h" />
+    <ClInclude Include="Source\Core\MCPTool\MCPBridge.h" />
     <ClInclude Include="Source\Core\Memory.h" />
     <ClInclude Include="Source\Core\PatternScanner.h" />
-    <ClInclude Include="Source\Core\Camera.h" />
-    <ClInclude Include="Source\Core\MCPTool\MCPBridge.h" />
-    <ClInclude Include="Source\Hooks\HookManager.h" />
-    <ClInclude Include="Source\Hooks\D3D9Hook.h" />
-    <ClInclude Include="Source\Hooks\D3D11Hook.h" />
-    <ClInclude Include="Source\Hooks\WndProcHook.h" />
-    <ClInclude Include="Source\Game\GameOffsets.h" />
+    <ClInclude Include="Source\Core\StringUtils.h" />
+    <ClInclude Include="Source\Core\Types.h" />
+    <ClInclude Include="Source\Game\Bot\GrindBot.h" />
+    <ClInclude Include="Source\Game\Buffs\Buff.h" />
+    <ClInclude Include="Source\Game\Buffs\BuffManager.h" />
+    <ClInclude Include="Source\Game\Combat\ComboManager.h" />
+    <ClInclude Include="Source\Game\Combat\HealManager.h" />
+    <ClInclude Include="Source\Game\Combat\RiskCalculator.h" />
     <ClInclude Include="Source\Game\Entities\Entity.h" />
-    <ClInclude Include="Source\Game\Entities\LocalPlayer.h" />
     <ClInclude Include="Source\Game\Entities\EntityManager.h" />
-    <ClInclude Include="Source\Game\Skills\Skill.h" />
-    <ClInclude Include="Source\Game\Skills\SkillManager.h" />
+    <ClInclude Include="Source\Game\Entities\LocalPlayer.h" />
+    <ClInclude Include="Source\Game\GameOffsets.h" />
     <ClInclude Include="Source\Game\Items\GroundItem.h" />
     <ClInclude Include="Source\Game\Items\GroundItemManager.h" />
     <ClInclude Include="Source\Game\Items\InventoryItem.h" />
     <ClInclude Include="Source\Game\Items\InventoryManager.h" />
     <ClInclude Include="Source\Game\Login\AutoLoginManager.h" />
-    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h" />
-    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h" />
+    <ClInclude Include="Source\Game\Navigation\NavigationManager.h" />
     <ClInclude Include="Source\Game\Quests\Quest.h" />
     <ClInclude Include="Source\Game\Quests\QuestManager.h" />
-    <ClInclude Include="Source\Game\Navigation\NavigationManager.h" />
-    <ClInclude Include="Source\Game\Buffs\Buff.h" />
-    <ClInclude Include="Source\Game\Buffs\BuffManager.h" />
-    <ClInclude Include="Source\Game\Combat\RiskCalculator.h" />
-    <ClInclude Include="Source\Game\Combat\ComboManager.h" />
-    <ClInclude Include="Source\Game\Combat\HealManager.h" />
-    <ClInclude Include="Source\Game\Bot\GrindBot.h" />
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h" />
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h" />
+    <ClInclude Include="Source\Game\Skills\Skill.h" />
+    <ClInclude Include="Source\Game\Skills\SkillManager.h" />
     <ClInclude Include="Source\Game\Visuals\SkinChanger.h" />
-    <ClInclude Include="Source\UI\Renderer.h" />
-    <ClInclude Include="Source\UI\Menu.h" />
-    <ClInclude Include="Source\Config\Settings.h" />
+    <ClInclude Include="Source\Hooks\D3D11Hook.h" />
+    <ClInclude Include="Source\Hooks\D3D9Hook.h" />
+    <ClInclude Include="Source\Hooks\HookManager.h" />
+    <ClInclude Include="Source\Hooks\WndProcHook.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_aimbot_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_alert_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_background_jpg.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_character_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_dashboard_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_dpi_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_hotkeys_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_items_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_language_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_logo_stack_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_logo_wide_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_misc_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_movement_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_overlays_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_profile_jpg.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_render_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_settings_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_store_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_styles_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_teste_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_theme_png.h" />
+    <ClInclude Include="Source\Interface\Assets\ui_asset_visuals_png.h" />
+    <ClInclude Include="Source\Interface\Blade\BladeBridge.h" />
+    <ClInclude Include="Source\Interface\Blade\blade_ui.hpp" />
+    <ClInclude Include="Source\Interface\Fonts\Bau_ttf.h" />
+    <ClInclude Include="Source\Interface\Fonts\Louis_George_Cafe_Bold_ttf.h" />
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-ExtraBold.h" />
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-Medium.h" />
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-Regular.h" />
+    <ClInclude Include="Source\Interface\Fonts\icons_ttf.h" />
+    <ClInclude Include="Source\Interface\Fonts\paladinssemiital_ttf.h" />
+    <ClInclude Include="Source\Interface\Fonts\pivodef_ttf.h" />
     <ClInclude Include="Source\Security\ProtectMacro.h" />
     <ClInclude Include="Source\Security\skCrpyt.h" />
-    <ClInclude Include="Source\Interface\Blade\blade_ui.hpp" />
-    <ClInclude Include="Source\Interface\Blade\BladeBridge.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imconfig.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imgui.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imgui_internal.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imstb_rectpack.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imstb_textedit.h" />
     <ClInclude Include="Source\ThirdParty\ImGui\imstb_truetype.h" />
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h" />
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h" />
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h" />
+    <ClInclude Include="Source\ThirdParty\ImGui\stb_image.h" />
+    <ClInclude Include="Source\UI\Menu.h" />
+    <ClInclude Include="Source\UI\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Source\Core\Logger.cpp" />
-    <ClCompile Include="Source\Core\StringUtils.cpp" />
-    <ClCompile Include="Source\Core\Memory.cpp" />
-    <ClCompile Include="Source\Core\PatternScanner.cpp" />
     <ClCompile Include="Source\Core\Camera.cpp" />
     <ClCompile Include="Source\Core\DllMain.cpp" />
+    <ClCompile Include="Source\Core\Logger.cpp" />
     <ClCompile Include="Source\Core\MCPTool\MCPBridge.cpp" />
-    <ClCompile Include="Source\Hooks\HookManager.cpp" />
-    <ClCompile Include="Source\Hooks\D3D9Hook.cpp" />
-    <ClCompile Include="Source\Hooks\D3D11Hook.cpp" />
-    <ClCompile Include="Source\Hooks\WndProcHook.cpp" />
-    <ClCompile Include="Source\Game\GameOffsets.cpp" />
+    <ClCompile Include="Source\Core\Memory.cpp" />
+    <ClCompile Include="Source\Core\PatternScanner.cpp" />
+    <ClCompile Include="Source\Core\StringUtils.cpp" />
+    <ClCompile Include="Source\Game\Bot\GrindBot.cpp" />
+    <ClCompile Include="Source\Game\Buffs\BuffManager.cpp" />
+    <ClCompile Include="Source\Game\Combat\ComboManager.cpp" />
+    <ClCompile Include="Source\Game\Combat\HealManager.cpp" />
+    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp" />
     <ClCompile Include="Source\Game\Entities\EntityManager.cpp" />
-    <ClCompile Include="Source\Game\Skills\SkillManager.cpp" />
+    <ClCompile Include="Source\Game\GameOffsets.cpp" />
     <ClCompile Include="Source\Game\Items\GroundItemManager.cpp" />
     <ClCompile Include="Source\Game\Items\InventoryManager.cpp" />
     <ClCompile Include="Source\Game\Login\AutoLoginManager.cpp" />
-    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp" />
-    <ClCompile Include="Source\Game\Quests\QuestManager.cpp" />
     <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp" />
-    <ClCompile Include="Source\Game\Buffs\BuffManager.cpp" />
-    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp" />
-    <ClCompile Include="Source\Game\Combat\ComboManager.cpp" />
-    <ClCompile Include="Source\Game\Combat\HealManager.cpp" />
-    <ClCompile Include="Source\Game\Bot\GrindBot.cpp" />
+    <ClCompile Include="Source\Game\Quests\QuestManager.cpp" />
+    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp" />
+    <ClCompile Include="Source\Game\Skills\SkillManager.cpp" />
     <ClCompile Include="Source\Game\Visuals\SkinChanger.cpp" />
-    <ClCompile Include="Source\UI\Renderer.cpp" />
-    <ClCompile Include="Source\UI\Menu.cpp" />
+    <ClCompile Include="Source\Hooks\D3D11Hook.cpp" />
+    <ClCompile Include="Source\Hooks\D3D9Hook.cpp" />
+    <ClCompile Include="Source\Hooks\HookManager.cpp" />
+    <ClCompile Include="Source\Hooks\WndProcHook.cpp" />
+    <ClCompile Include="Source\Interface\Blade\BladeBridge.cpp" />
+    <ClCompile Include="Source\Interface\Blade\blade_aimbot.cpp" />
     <ClCompile Include="Source\Interface\Blade\blade_core.cpp" />
     <ClCompile Include="Source\Interface\Blade\blade_menu.cpp" />
     <ClCompile Include="Source\Interface\Blade\blade_panels.cpp" />
     <ClCompile Include="Source\Interface\Blade\blade_popups.cpp" />
     <ClCompile Include="Source\Interface\Blade\blade_visuals.cpp" />
-    <ClCompile Include="Source\Interface\Blade\blade_aimbot.cpp" />
-    <ClCompile Include="Source\Interface\Blade\BladeBridge.cpp" />
     <ClCompile Include="Source\ThirdParty\ImGui\imgui.cpp" />
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_draw.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp" />
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp" />
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_tables.cpp" />
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_widgets.cpp" />
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp" />
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp" />
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp" />
+    <ClCompile Include="Source\UI\Menu.cpp" />
+    <ClCompile Include="Source\UI\Renderer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Source\Core\MCPTool\README.md" />
+    <None Include="Source\Core\MCPTool\mcp_client.py" />
+    <None Include="Source\Core\MCPTool\server.py" />
+    <None Include="Source\Core\MCPTool\test_mcp.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

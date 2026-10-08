@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef TEST_MODE
+#define TEST_MODE 1
+#endif
+
 #include <windows.h>
 
 namespace ShaiyaOverlay

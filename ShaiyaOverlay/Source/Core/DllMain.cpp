@@ -39,7 +39,9 @@ namespace ShaiyaOverlay
 
         Logger::Info("Overlay active! Press [INSERT] to toggle UI, [END] to unload.");
 
+#ifdef TEST_MODE
         AutoLoginManager::Initialize();
+#endif
 
 #ifdef MCP_TOOL
         MCPBridge::StartServer();
@@ -59,7 +61,9 @@ namespace ShaiyaOverlay
 
         Logger::Info("Unload requested. Cleaning up resources...");
 
+#ifdef TEST_MODE
         AutoLoginManager::Shutdown();
+#endif
         NavigationManager::Shutdown();
 
         WndProcHook::RequestUnload();

@@ -1580,11 +1580,16 @@ namespace ShaiyaOverlay
                     }
                 }
 
+#ifndef TEST_MODE
+                sprintf_s(pResponseJson, nMaxLen,
+                    "{\"status\":\"error\",\"action\":\"auto_login\",\"started\":false,\"message\":\"AutoLogin disabled: TEST_MODE macro is not active.\"}");
+#else
                 bool started = AutoLoginManager::Start(user, pass);
                 GameState state = AutoLoginManager::GetCurrentGameState();
                 sprintf_s(pResponseJson, nMaxLen,
                     "{\"status\":\"ok\",\"action\":\"auto_login\",\"started\":%s,\"game_state\":%u,\"state_name\":\"%s\",\"message\":\"%s\"}",
                     started ? "true" : "false", static_cast<U8>(state), AutoLoginManager::GetGameStateName(state), AutoLoginManager::GetStatusMessage());
+#endif
             }
             else if (strcmp(cmd, "unload") == 0 || strcmp(cmd, "unload_overlay") == 0 || strcmp(cmd, "eject") == 0)
             {

@@ -2,61 +2,93 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+      <UniqueIdentifier>{F7BBB357-7CE8-548D-97E2-521A957C54C3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Config">
+      <UniqueIdentifier>{186F61BF-AE9F-5EFF-8459-1DF87221B11A}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Core">
-      <UniqueIdentifier>{A1B2C3D4-0001-4000-8000-000000000001}</UniqueIdentifier>
+      <UniqueIdentifier>{F6B907BC-37AD-59EB-8CDE-B47DAACD0983}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Hooks">
-      <UniqueIdentifier>{A1B2C3D4-0002-4000-8000-000000000002}</UniqueIdentifier>
+    <Filter Include="Source\Core\MCPTool">
+      <UniqueIdentifier>{52C77F9C-9707-5029-AFF8-BAD49F1131DC}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Game">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000003}</UniqueIdentifier>
+      <UniqueIdentifier>{EDFA19F7-3605-538B-89B1-45B5DD819362}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Game\Entities">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000010}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Game\Skills">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000020}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Game\Items">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000025}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Game\QuickSlots">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000028}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Game\Quests">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000029}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Game\Navigation">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000035}</UniqueIdentifier>
+    <Filter Include="Source\Game\Bot">
+      <UniqueIdentifier>{49C95760-C83E-5148-9711-F4501E7C722D}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Game\Buffs">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000030}</UniqueIdentifier>
+      <UniqueIdentifier>{28E16DF8-8E5F-5834-86D8-1AFF20D68EFD}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Game\Combat">
-      <UniqueIdentifier>{A1B2C3D4-0003-4000-8000-000000000040}</UniqueIdentifier>
+      <UniqueIdentifier>{0FDFCFA7-09EE-555B-8BF8-48F6FDBCA8BA}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\UI">
-      <UniqueIdentifier>{A1B2C3D4-0004-4000-8000-000000000004}</UniqueIdentifier>
+    <Filter Include="Source\Game\Entities">
+      <UniqueIdentifier>{978D2367-67E7-55CE-927A-E3830A8EB1FA}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Items">
+      <UniqueIdentifier>{3F5CF3BC-C836-5EA6-923D-60CCDFF86313}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Login">
+      <UniqueIdentifier>{53D0B631-092F-5713-86B0-B395A15F92F4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Navigation">
+      <UniqueIdentifier>{77C94E10-E8FC-558B-A0ED-0C9EC76293DE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Quests">
+      <UniqueIdentifier>{4968B46D-A72D-50B8-88CB-1CC98DFB2B33}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\QuickSlots">
+      <UniqueIdentifier>{72AEAAE3-5A7A-5960-86BE-340D42E8A7D6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Skills">
+      <UniqueIdentifier>{263219E8-81D8-5EC4-BFD1-9105970380D7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Game\Visuals">
+      <UniqueIdentifier>{D8309551-EB18-52F6-95B4-853A24DB3519}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Hooks">
+      <UniqueIdentifier>{556C718F-9F38-5808-A45E-4D43FAD09902}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Interface">
+      <UniqueIdentifier>{3A65FB68-D613-5F8D-95A7-166A40E76973}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Interface\Assets">
+      <UniqueIdentifier>{391F5CBA-9F2E-5CFC-81D8-C2F6F30BA10D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Interface\Blade">
+      <UniqueIdentifier>{ED56638E-9FFD-5993-A833-12E33D60D658}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Interface\Fonts">
+      <UniqueIdentifier>{28645981-DDB3-5073-8F40-840F0CB137B7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Security">
+      <UniqueIdentifier>{EEA8D42E-9C4B-5844-A14D-CFF5620B020A}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\ThirdParty">
-      <UniqueIdentifier>{A1B2C3D4-0005-4000-8000-000000000005}</UniqueIdentifier>
+      <UniqueIdentifier>{91AC6239-82CE-5A15-AB67-98590543035D}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\ThirdParty\ImGui">
-      <UniqueIdentifier>{A1B2C3D4-0006-4000-8000-000000000006}</UniqueIdentifier>
+      <UniqueIdentifier>{8747115A-81C1-54A7-B099-4E342D2C681E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\UI">
+      <UniqueIdentifier>{C8FDFA66-5D17-5A66-A7CD-6CD9C58E8AD1}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Source\Core\Types.h">
+    <ClInclude Include="Source\Config\Settings.h">
+      <Filter>Source\Config</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Camera.h">
       <Filter>Source\Core</Filter>
     </ClInclude>
     <ClInclude Include="Source\Core\Logger.h">
       <Filter>Source\Core</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Core\StringUtils.h">
-      <Filter>Source\Core</Filter>
+    <ClInclude Include="Source\Core\MCPTool\MCPBridge.h">
+      <Filter>Source\Core\MCPTool</Filter>
     </ClInclude>
     <ClInclude Include="Source\Core\Memory.h">
       <Filter>Source\Core</Filter>
@@ -64,59 +96,14 @@
     <ClInclude Include="Source\Core\PatternScanner.h">
       <Filter>Source\Core</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Core\Camera.h">
+    <ClInclude Include="Source\Core\StringUtils.h">
       <Filter>Source\Core</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Hooks\HookManager.h">
-      <Filter>Source\Hooks</Filter>
+    <ClInclude Include="Source\Core\Types.h">
+      <Filter>Source\Core</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Hooks\D3D9Hook.h">
-      <Filter>Source\Hooks</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Hooks\D3D11Hook.h">
-      <Filter>Source\Hooks</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Hooks\WndProcHook.h">
-      <Filter>Source\Hooks</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\GameOffsets.h">
-      <Filter>Source\Game</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Entities\Entity.h">
-      <Filter>Source\Game\Entities</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Entities\LocalPlayer.h">
-      <Filter>Source\Game\Entities</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Entities\EntityManager.h">
-      <Filter>Source\Game\Entities</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Skills\Skill.h">
-      <Filter>Source\Game\Skills</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Skills\SkillManager.h">
-      <Filter>Source\Game\Skills</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Items\GroundItem.h">
-      <Filter>Source\Game\Items</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Items\GroundItemManager.h">
-      <Filter>Source\Game\Items</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h">
-      <Filter>Source\Game\QuickSlots</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h">
-      <Filter>Source\Game\QuickSlots</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Quests\Quest.h">
-      <Filter>Source\Game\Quests</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Quests\QuestManager.h">
-      <Filter>Source\Game\Quests</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Game\Navigation\NavigationManager.h">
-      <Filter>Source\Game\Navigation</Filter>
+    <ClInclude Include="Source\Game\Bot\GrindBot.h">
+      <Filter>Source\Game\Bot</Filter>
     </ClInclude>
     <ClInclude Include="Source\Game\Buffs\Buff.h">
       <Filter>Source\Game\Buffs</Filter>
@@ -124,28 +111,193 @@
     <ClInclude Include="Source\Game\Buffs\BuffManager.h">
       <Filter>Source\Game\Buffs</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Game\Combat\RiskCalculator.h">
-      <Filter>Source\Game\Combat</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Game\Combat\ComboManager.h">
       <Filter>Source\Game\Combat</Filter>
     </ClInclude>
     <ClInclude Include="Source\Game\Combat\HealManager.h">
       <Filter>Source\Game\Combat</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Game\Bot\GrindBot.h">
+    <ClInclude Include="Source\Game\Combat\RiskCalculator.h">
+      <Filter>Source\Game\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\Entity.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\EntityManager.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Entities\LocalPlayer.h">
+      <Filter>Source\Game\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\GameOffsets.h">
       <Filter>Source\Game</Filter>
     </ClInclude>
-    <ClInclude Include="Source\UI\Renderer.h">
-      <Filter>Source\UI</Filter>
+    <ClInclude Include="Source\Game\Items\GroundItem.h">
+      <Filter>Source\Game\Items</Filter>
     </ClInclude>
-    <ClInclude Include="Source\UI\Menu.h">
-      <Filter>Source\UI</Filter>
+    <ClInclude Include="Source\Game\Items\GroundItemManager.h">
+      <Filter>Source\Game\Items</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Items\InventoryItem.h">
+      <Filter>Source\Game\Items</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Items\InventoryManager.h">
+      <Filter>Source\Game\Items</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Login\AutoLoginManager.h">
+      <Filter>Source\Game\Login</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Navigation\NavigationManager.h">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Quests\Quest.h">
+      <Filter>Source\Game\Quests</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Quests\QuestManager.h">
+      <Filter>Source\Game\Quests</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\QuickSlots\QuickSlotManager.h">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Skills\Skill.h">
+      <Filter>Source\Game\Skills</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Skills\SkillManager.h">
+      <Filter>Source\Game\Skills</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Game\Visuals\SkinChanger.h">
+      <Filter>Source\Game\Visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\D3D11Hook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\D3D9Hook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\HookManager.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Hooks\WndProcHook.h">
+      <Filter>Source\Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_aimbot_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_alert_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_background_jpg.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_character_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_dashboard_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_dpi_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_hotkeys_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_items_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_language_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_logo_stack_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_logo_wide_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_misc_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_movement_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_overlays_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_profile_jpg.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_render_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_settings_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_store_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_styles_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_teste_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_theme_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Assets\ui_asset_visuals_png.h">
+      <Filter>Source\Interface\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Blade\BladeBridge.h">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Blade\blade_ui.hpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\Bau_ttf.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\Louis_George_Cafe_Bold_ttf.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-ExtraBold.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-Medium.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\Montserrat-Regular.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\icons_ttf.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\paladinssemiital_ttf.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Interface\Fonts\pivodef_ttf.h">
+      <Filter>Source\Interface\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Security\ProtectMacro.h">
+      <Filter>Source\Security</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Security\skCrpyt.h">
+      <Filter>Source\Security</Filter>
     </ClInclude>
     <ClInclude Include="Source\ThirdParty\ImGui\imconfig.h">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClInclude>
     <ClInclude Include="Source\ThirdParty\ImGui\imgui.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClInclude>
     <ClInclude Include="Source\ThirdParty\ImGui\imgui_internal.h">
@@ -160,22 +312,28 @@
     <ClInclude Include="Source\ThirdParty\ImGui\imstb_truetype.h">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_win32.h">
+    <ClInclude Include="Source\ThirdParty\ImGui\stb_image.h">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClInclude>
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx9.h">
-      <Filter>Source\ThirdParty\ImGui</Filter>
+    <ClInclude Include="Source\UI\Menu.h">
+      <Filter>Source\UI</Filter>
     </ClInclude>
-    <ClInclude Include="Source\ThirdParty\ImGui\imgui_impl_dx11.h">
-      <Filter>Source\ThirdParty\ImGui</Filter>
+    <ClInclude Include="Source\UI\Renderer.h">
+      <Filter>Source\UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Core\Camera.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\DllMain.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Core\Logger.cpp">
       <Filter>Source\Core</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Core\StringUtils.cpp">
-      <Filter>Source\Core</Filter>
+    <ClCompile Include="Source\Core\MCPTool\MCPBridge.cpp">
+      <Filter>Source\Core\MCPTool</Filter>
     </ClCompile>
     <ClCompile Include="Source\Core\Memory.cpp">
       <Filter>Source\Core</Filter>
@@ -183,50 +341,14 @@
     <ClCompile Include="Source\Core\PatternScanner.cpp">
       <Filter>Source\Core</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Core\Camera.cpp">
+    <ClCompile Include="Source\Core\StringUtils.cpp">
       <Filter>Source\Core</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Core\DllMain.cpp">
-      <Filter>Source\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Hooks\HookManager.cpp">
-      <Filter>Source\Hooks</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Hooks\D3D9Hook.cpp">
-      <Filter>Source\Hooks</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Hooks\D3D11Hook.cpp">
-      <Filter>Source\Hooks</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Hooks\WndProcHook.cpp">
-      <Filter>Source\Hooks</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\GameOffsets.cpp">
-      <Filter>Source\Game</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Entities\EntityManager.cpp">
-      <Filter>Source\Game\Entities</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Skills\SkillManager.cpp">
-      <Filter>Source\Game\Skills</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Items\GroundItemManager.cpp">
-      <Filter>Source\Game\Items</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp">
-      <Filter>Source\Game\QuickSlots</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Quests\QuestManager.cpp">
-      <Filter>Source\Game\Quests</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp">
-      <Filter>Source\Game\Navigation</Filter>
+    <ClCompile Include="Source\Game\Bot\GrindBot.cpp">
+      <Filter>Source\Game\Bot</Filter>
     </ClCompile>
     <ClCompile Include="Source\Game\Buffs\BuffManager.cpp">
       <Filter>Source\Game\Buffs</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp">
-      <Filter>Source\Game\Combat</Filter>
     </ClCompile>
     <ClCompile Include="Source\Game\Combat\ComboManager.cpp">
       <Filter>Source\Game\Combat</Filter>
@@ -234,19 +356,85 @@
     <ClCompile Include="Source\Game\Combat\HealManager.cpp">
       <Filter>Source\Game\Combat</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Game\Bot\GrindBot.cpp">
+    <ClCompile Include="Source\Game\Combat\RiskCalculator.cpp">
+      <Filter>Source\Game\Combat</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Entities\EntityManager.cpp">
+      <Filter>Source\Game\Entities</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\GameOffsets.cpp">
       <Filter>Source\Game</Filter>
     </ClCompile>
-    <ClCompile Include="Source\UI\Renderer.cpp">
-      <Filter>Source\UI</Filter>
+    <ClCompile Include="Source\Game\Items\GroundItemManager.cpp">
+      <Filter>Source\Game\Items</Filter>
     </ClCompile>
-    <ClCompile Include="Source\UI\Menu.cpp">
-      <Filter>Source\UI</Filter>
+    <ClCompile Include="Source\Game\Items\InventoryManager.cpp">
+      <Filter>Source\Game\Items</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Login\AutoLoginManager.cpp">
+      <Filter>Source\Game\Login</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Quests\QuestManager.cpp">
+      <Filter>Source\Game\Quests</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp">
+      <Filter>Source\Game\QuickSlots</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Skills\SkillManager.cpp">
+      <Filter>Source\Game\Skills</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Visuals\SkinChanger.cpp">
+      <Filter>Source\Game\Visuals</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\D3D11Hook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\D3D9Hook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\HookManager.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Hooks\WndProcHook.cpp">
+      <Filter>Source\Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\BladeBridge.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_aimbot.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_core.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_menu.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_panels.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_popups.cpp">
+      <Filter>Source\Interface\Blade</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Interface\Blade\blade_visuals.cpp">
+      <Filter>Source\Interface\Blade</Filter>
     </ClCompile>
     <ClCompile Include="Source\ThirdParty\ImGui\imgui.cpp">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClCompile>
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_draw.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp">
+      <Filter>Source\ThirdParty\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClCompile>
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_tables.cpp">
@@ -255,14 +443,25 @@
     <ClCompile Include="Source\ThirdParty\ImGui\imgui_widgets.cpp">
       <Filter>Source\ThirdParty\ImGui</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_win32.cpp">
-      <Filter>Source\ThirdParty\ImGui</Filter>
+    <ClCompile Include="Source\UI\Menu.cpp">
+      <Filter>Source\UI</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx9.cpp">
-      <Filter>Source\ThirdParty\ImGui</Filter>
+    <ClCompile Include="Source\UI\Renderer.cpp">
+      <Filter>Source\UI</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ThirdParty\ImGui\imgui_impl_dx11.cpp">
-      <Filter>Source\ThirdParty\ImGui</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Source\Core\MCPTool\README.md">
+      <Filter>Source\Core\MCPTool</Filter>
+    </None>
+    <None Include="Source\Core\MCPTool\mcp_client.py">
+      <Filter>Source\Core\MCPTool</Filter>
+    </None>
+    <None Include="Source\Core\MCPTool\server.py">
+      <Filter>Source\Core\MCPTool</Filter>
+    </None>
+    <None Include="Source\Core\MCPTool\test_mcp.py">
+      <Filter>Source\Core\MCPTool</Filter>
+    </None>
   </ItemGroup>
 </Project>

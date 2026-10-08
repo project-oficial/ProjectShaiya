@@ -54,7 +54,7 @@ namespace Shaiya::Config
         bool Wallpaper = true;
         bool Particles = true;
 
-        float UiScale = 1.0f;
+        float UiScale = 1.2f;
         float AnimationSpeed = 1.0f;
         float SliderLoad = 1.0f;
         float ToggleLoad = 1.0f;
@@ -94,7 +94,7 @@ namespace Shaiya::Config
             Wallpaper = true;
             Particles = true;
 
-            UiScale = 1.0f;
+            UiScale = 1.5f;
             AnimationSpeed = 1.0f;
             SliderLoad = 1.0f;
             ToggleLoad = 1.0f;

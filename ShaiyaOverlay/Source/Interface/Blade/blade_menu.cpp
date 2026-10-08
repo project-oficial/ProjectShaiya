@@ -900,6 +900,7 @@ static void DrawSettingsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         RowColor(L, pstra("Background Panel"), pstra("##th_panel_col"), (ImVec4*)&settings.Interface.PanelColor.Value);
         RowColor(L, pstra("Text Color"), pstra("##th_text_col"), (ImVec4*)&settings.Interface.TextColor.Value);
 
+#ifdef TEST_MODE
         R.Section(pstra("Auto-Login & Account"), 4);
         const auto& loginCfg = ShaiyaOverlay::AutoLoginManager::GetConfig();
         char userBuf[64];
@@ -915,6 +916,11 @@ static void DrawSettingsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         R.Row(statusBuf, true);
 
         R.Row(pstra("RSA Handshake: Confirmed"), true);
+#else
+        R.Section(pstra("Auto-Login & Account"), 2);
+        R.Row(pstra("Auto-Login: Disabled"), true);
+        R.Row(pstra("Requires TEST_MODE macro"), true);
+#endif
     }
 
     content_h = ImMax(L.y, R.y) - base_y;

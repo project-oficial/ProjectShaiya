@@ -21,6 +21,12 @@ namespace ShaiyaOverlay
 
     bool AutoLoginManager::Initialize()
     {
+#ifndef TEST_MODE
+        Config.Enabled = false;
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Disabled (TEST_MODE not active)");
+        Logger::Info("[AutoLogin] AutoLogin disabled (TEST_MODE not defined).");
+        return false;
+#else
         LoadConfig();
 
         if (Config.Enabled && Config.Username[0] != '\0' && Config.Password[0] != '\0')
@@ -34,6 +40,7 @@ namespace ShaiyaOverlay
         }
 
         return true;
+#endif
     }
 
     void AutoLoginManager::Shutdown()
@@ -82,7 +89,11 @@ namespace ShaiyaOverlay
 
     bool AutoLoginManager::IsRunning()
     {
+#ifndef TEST_MODE
+        return false;
+#else
         return Running;
+#endif
     }
 
     GameState AutoLoginManager::GetCurrentGameState()
@@ -156,6 +167,11 @@ namespace ShaiyaOverlay
 
     bool AutoLoginManager::Start(const char* OverrideUser, const char* OverridePass)
     {
+#ifndef TEST_MODE
+        StringUtils::Format(StatusMessage, sizeof(StatusMessage), "Disabled (TEST_MODE not active)");
+        Logger::Info("[AutoLogin] Cannot start AutoLogin: TEST_MODE macro is not defined.");
+        return false;
+#else
         if (Running)
             return false;
 
@@ -176,6 +192,7 @@ namespace ShaiyaOverlay
 
         ThreadHandle = CreateThread(nullptr, 0, WorkerThread, nullptr, 0, nullptr);
         return (ThreadHandle != nullptr);
+#endif
     }
 
     void AutoLoginManager::Stop()
