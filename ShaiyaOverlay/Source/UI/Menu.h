@@ -25,6 +25,7 @@ namespace ShaiyaOverlay
 
         static void RenderGroundItemSnaplines();
         static void RenderQuestWaypoints();
+        static void RenderMonsterEsp();
 
         static bool SnaplinesEnabled;
         static bool QuestWaypointsEnabled;

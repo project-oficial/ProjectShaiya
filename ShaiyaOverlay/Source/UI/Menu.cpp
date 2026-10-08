@@ -11,6 +11,7 @@
 #include "Game/Combat/ComboManager.h"
 #include "Game/Combat/HealManager.h"
 #include "Game/Bot/GrindBot.h"
+#include "Game/Visuals/SkinChanger.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Items/InventoryManager.h"
 #include "Game/QuickSlots/QuickSlotManager.h"
@@ -18,22 +19,14 @@
 #include "Game/Navigation/NavigationManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "Core/MCPTool/MCPBridge.h"
+#include "Interface/Blade/blade_ui.hpp"
+#include "Interface/Blade/BladeBridge.h"
+#include "Config/Settings.h"
 
 namespace ShaiyaOverlay
 {
     bool Menu::SnaplinesEnabled = true;
     bool Menu::QuestWaypointsEnabled = true;
-    static ImVec4 GetThreatColor(ThreatLevel Threat)
-    {
-        switch (Threat)
-        {
-        case ThreatLevel::Fatal:  return ImVec4(1.0f, 0.15f, 0.15f, 1.0f);
-        case ThreatLevel::High:   return ImVec4(1.0f, 0.5f, 0.1f, 1.0f);
-        case ThreatLevel::Medium: return ImVec4(1.0f, 0.85f, 0.15f, 1.0f);
-        case ThreatLevel::Low:    return ImVec4(0.2f, 0.9f, 0.3f, 1.0f);
-        default:                  return ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
-        }
-    }
 
     void Menu::Render()
     {
@@ -66,127 +59,45 @@ namespace ShaiyaOverlay
         ComboManager::Update();
         HealManager::Update();
         GrindBot::Update();
-
-        const PlayerData& Player = EntityManager::GetLocalPlayer();
-        const FixedList<MonsterEntity, 128>& Monsters = EntityManager::GetNearbyMonsters();
-        RiskAssessment Risk = RiskCalculator::Evaluate(Player, Monsters);
+        SkinChanger::Update();
 
         // Control ImGui software cursor visibility based on menu state
-        ImGui::GetIO().MouseDrawCursor = WndProcHook::IsMenuOpen();
+        Blade::S.menu_open = WndProcHook::IsMenuOpen();
+        ImGui::GetIO().MouseDrawCursor = Blade::S.menu_open;
 
-        // Always-on Hardcore Threat Banner (visible whether menu is toggled or not)
-        F32 BannerHeight = 75.0f;
-        if (NavigationManager::IsNavigating()) BannerHeight += 20.0f;
-        if (ComboManager::IsActive()) BannerHeight += 20.0f;
-        if (HealManager::GetConfig().Enabled) BannerHeight += 20.0f;
-        if (GrindBot::GetConfig().Enabled) BannerHeight += 20.0f;
-
-        ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(440.0f, BannerHeight), ImGuiCond_Always);
-
-        ImGuiWindowFlags BannerFlags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-        if (!WndProcHook::IsMenuOpen())
-            BannerFlags |= ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground;
-
-        if (ImGui::Begin("Shaiya Hardcore Overlay", nullptr, BannerFlags))
+        // Update session user for Blade UI
+        const auto& localPlayer = EntityManager::GetLocalPlayer();
+        if (localPlayer.Valid)
         {
-            ImVec4 ThreatCol = GetThreatColor(Risk.OverallThreat);
-            ImGui::TextColored(ThreatCol, "[RISK: %s]", Risk.Summary);
-            ImGui::Text("FPS: %.1f | Hostiles: %u | Quests: %u",
-                ImGui::GetIO().Framerate, Risk.NearbyHostilesCount, QuestManager::GetQuestCount());
-
-            if (WndProcHook::IsMenuOpen())
-            {
-                ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
-                if (ImGui::SmallButton("UNLOAD MOD (END)"))
-                {
-                    WndProcHook::RequestUnload();
-                }
-                ImGui::PopStyleColor(3);
-            }
-
-            if (NavigationManager::IsComputingPath())
-            {
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), ">> AUTO-WALK: Calculating route to %s...",
-                    NavigationManager::GetTargetName());
-                if (WndProcHook::IsMenuOpen())
-                {
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("CANCEL"))
-                    {
-                        NavigationManager::Stop();
-                    }
-                }
-            }
-            else if (NavigationManager::IsNavigating())
-            {
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), ">> AUTO-WALK: %s (%.1fm)",
-                    NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());
-                if (WndProcHook::IsMenuOpen())
-                {
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("STOP"))
-                    {
-                        NavigationManager::Stop();
-                    }
-                }
-            }
-
-            if (ComboManager::IsActive())
-            {
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.0f, 1.0f), ">> AUTO-COMBO: ACTIVE (Key: C)");
-                if (WndProcHook::IsMenuOpen())
-                {
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("STOP COMBO"))
-                    {
-                        ComboManager::SetActive(false);
-                    }
-                }
-            }
-
-            if (HealManager::GetConfig().Enabled)
-            {
-                InventoryItem bestHp = { 0 };
-                if (HealManager::FindBestHpItem(&bestHp))
-                {
-                    ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), ">> AUTO-HEAL: ACTIVE (HP <= %.0f%% -> %s)",
-                        HealManager::GetConfig().HpThresholdPercent, bestHp.Name);
-                }
-                else
-                {
-                    ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), ">> AUTO-HEAL: ACTIVE (No HP item in bag)");
-                }
-            }
-
-            if (GrindBot::GetConfig().Enabled)
-            {
-                ImGui::TextColored(ImVec4(0.9f, 0.5f, 1.0f, 1.0f), ">> GRIND BOT: ACTIVE [%s] (Kills: %u)",
-                    GrindBot::GetStateName(), GrindBot::GetStats().MonstersKilled);
-                if (WndProcHook::IsMenuOpen())
-                {
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("STOP BOT"))
-                    {
-                        GrindBot::ToggleActive();
-                    }
-                }
-            }
+            char sessionUser[64];
+            snprintf(sessionUser, sizeof(sessionUser), "%s (Lv.%u)", "Player", localPlayer.Level);
+            BladeBridge::SetSession(sessionUser, "Premium VIP");
         }
-        ImGui::End();
 
-        // 3D World to Screen snaplines (always visible when enabled)
-        RenderGroundItemSnaplines();
-        RenderQuestWaypoints();
+        // Render faithful Blade interface & HUDs
+        BladeBridge::Render();
 
-        // Single Unified Control Panel with Tabs (visible when UI is opened via INSERT)
-        if (!WndProcHook::IsMenuOpen())
-            return;
+        // 3D World to Screen snaplines & ESP
+        if (Settings::Get().Visuals.Loot && Settings::Get().Visuals.LootSnaplines)
+            RenderGroundItemSnaplines();
 
-        RenderMainWindow();
+        if (Settings::Get().Visuals.QuestWaypoints)
+            RenderQuestWaypoints();
+
+        if (Settings::Get().Visuals.MonsterEsp)
+            RenderMonsterEsp();
+    }
+
+    static ImVec4 GetThreatColor(ThreatLevel Threat)
+    {
+        switch (Threat)
+        {
+        case ThreatLevel::Fatal:  return ImVec4(1.0f, 0.15f, 0.15f, 1.0f);
+        case ThreatLevel::High:   return ImVec4(1.0f, 0.5f, 0.1f, 1.0f);
+        case ThreatLevel::Medium: return ImVec4(1.0f, 0.85f, 0.15f, 1.0f);
+        case ThreatLevel::Low:    return ImVec4(0.2f, 0.9f, 0.3f, 1.0f);
+        default:                  return ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+        }
     }
 
     void Menu::RenderMainWindow()
@@ -1246,6 +1157,74 @@ namespace ShaiyaOverlay
                         NavigationManager::GetTargetName(), NavigationManager::GetRemainingDistance());
                     DrawList->AddText(ImVec2(TargetPos.x + 18.0f, TargetPos.y - 8.0f), Color, Label);
                 }
+            }
+        }
+    }
+
+    void Menu::RenderMonsterEsp()
+    {
+        const auto& cfg = Settings::Get().Visuals;
+        if (!cfg.MonsterEsp) return;
+
+        ImGuiIO& Io = ImGui::GetIO();
+        F32 ScreenW = Io.DisplaySize.x;
+        F32 ScreenH = Io.DisplaySize.y;
+        if (ScreenW <= 0.0f || ScreenH <= 0.0f) return;
+
+        ImDrawList* dl = ImGui::GetBackgroundDrawList();
+        const auto& monsters = EntityManager::GetNearbyMonsters();
+
+        for (U32 i = 0; i < monsters.GetCount(); i++)
+        {
+            const auto& m = monsters[i];
+            if (!m.Alive || m.CurrentHp == 0) continue;
+
+            Vector2 screenPos;
+            if (!Camera::WorldToScreen(m.Position, screenPos, ScreenW, ScreenH))
+                continue;
+
+            Vector3 headPos = m.Position;
+            headPos.Y += 1.8f;
+            Vector2 headScreen;
+            if (!Camera::WorldToScreen(headPos, headScreen, ScreenW, ScreenH))
+                continue;
+
+            float boxH = fabsf(screenPos.Y - headScreen.Y);
+            if (boxH < 8.0f) boxH = 8.0f;
+            float boxW = boxH * 0.55f;
+
+            ImVec2 bmin(screenPos.X - boxW * 0.5f, headScreen.Y);
+            ImVec2 bmax(screenPos.X + boxW * 0.5f, screenPos.Y);
+
+            ImU32 col = ImGui::ColorConvertFloat4ToU32(cfg.MonsterColor);
+
+            if (cfg.MonsterBox)
+                dl->AddRect(bmin, bmax, col, 2.0f, 0, 1.2f);
+
+            if (cfg.MonsterName || cfg.MonsterDist)
+            {
+                char buf[64];
+                if (cfg.MonsterName && cfg.MonsterDist)
+                    snprintf(buf, sizeof(buf), "%s [%.0fm]", m.Name, m.Distance);
+                else if (cfg.MonsterName)
+                    snprintf(buf, sizeof(buf), "%s", m.Name);
+                else
+                    snprintf(buf, sizeof(buf), "[%.0fm]", m.Distance);
+
+                ImVec2 tsz = ImGui::CalcTextSize(buf);
+                dl->AddText(ImVec2(screenPos.X - tsz.x * 0.5f, bmin.y - tsz.y - 2.0f), col, buf);
+            }
+
+            if (cfg.MonsterHp && m.MaxHp > 0)
+            {
+                float hpRatio = (float)m.CurrentHp / (float)m.MaxHp;
+                hpRatio = ImClamp(hpRatio, 0.0f, 1.0f);
+                float barW = 3.0f;
+                ImVec2 hmin(bmin.x - barW - 3.0f, bmin.y);
+                ImVec2 hmax(bmin.x - 3.0f, bmax.y);
+                dl->AddRectFilled(hmin, hmax, IM_COL32(20, 20, 20, 180));
+                ImVec2 hpTop(hmin.x, bmax.y - (bmax.y - bmin.y) * hpRatio);
+                dl->AddRectFilled(hpTop, hmax, IM_COL32(230, 50, 50, 230));
             }
         }
     }

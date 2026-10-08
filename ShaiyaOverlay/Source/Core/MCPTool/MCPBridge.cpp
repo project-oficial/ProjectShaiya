@@ -15,6 +15,7 @@
 #include "Game/Combat/ComboManager.h"
 #include "Game/Combat/HealManager.h"
 #include "Game/Login/AutoLoginManager.h"
+#include "Game/Visuals/SkinChanger.h"
 #include "UI/Menu.h"
 
 #include <windows.h>
@@ -780,6 +781,58 @@ namespace ShaiyaOverlay
                 cfg.MaxTargetRange);
         }
 
+        static void HandleGetSkin(char* pResponse, size_t nMaxLen)
+        {
+            const auto& sc = SkinChanger::GetConfig();
+            sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"skin\":{\"enabled\":%s,\"costume\":%u,\"wings\":%u,\"w1_glow\":%u,\"w2_glow\":%u,\"hair\":%u,\"face\":%u}}",
+                sc.Enabled ? "true" : "false",
+                sc.CostumeTypeId, sc.WingsTypeId,
+                sc.Weapon1Glow, sc.Weapon2Glow, sc.Hair, sc.Face
+            );
+        }
+
+        static void HandleSetSkin(const char* pRequest, char* pResponse, size_t nMaxLen)
+        {
+            auto& sc = SkinChanger::GetConfig();
+
+            double presetVal = 0.0;
+            if (extract_json_double(pRequest, "preset", presetVal) && presetVal > 0.0)
+            {
+                SkinChanger::SetArmorPreset(static_cast<int>(presetVal));
+            }
+
+            double transVal = 0.0;
+            if (extract_json_double(pRequest, "transform", transVal) && transVal > 0.0)
+            {
+                SkinChanger::SetTransformation(static_cast<int>(transVal), 4, 20);
+            }
+
+            double wingsVal = 0.0;
+            if (extract_json_double(pRequest, "wings", wingsVal) && wingsVal > 0.0)
+            {
+                SkinChanger::SetWings(static_cast<int>(wingsVal));
+            }
+
+            double glowVal = -1.0;
+            if (extract_json_double(pRequest, "glow", glowVal) && glowVal >= 0.0)
+            {
+                SkinChanger::SetGlowPreset(static_cast<int>(glowVal));
+            }
+
+            bool enabledVal = sc.Enabled;
+            if (extract_json_bool(pRequest, "enabled", enabledVal))
+            {
+                sc.Enabled = enabledVal;
+                if (enabledVal)
+                    SkinChanger::ApplySkins();
+                else
+                    SkinChanger::RestoreOriginal();
+            }
+
+            HandleGetSkin(pResponse, nMaxLen);
+        }
+
         static void HandleUseItem(const char* pRequest, char* pResponse, size_t nMaxLen)
         {
             double dBag = 0, dSlot = 0;
@@ -1465,6 +1518,14 @@ namespace ShaiyaOverlay
             else if (strcmp(cmd, "set_autoheal") == 0)
             {
                 HandleSetAutoHeal(pRequestJson, pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "get_skin") == 0)
+            {
+                HandleGetSkin(pResponseJson, nMaxLen);
+            }
+            else if (strcmp(cmd, "set_skin") == 0)
+            {
+                HandleSetSkin(pRequestJson, pResponseJson, nMaxLen);
             }
             else if (strcmp(cmd, "select_target") == 0)
             {

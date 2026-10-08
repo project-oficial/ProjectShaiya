@@ -352,6 +352,36 @@ def set_autoheal(enabled: Optional[bool] = None,
     return res
 
 
+def query_skin() -> Dict[str, Any]:
+    """Retrieves current skin changer configuration and visual overrides."""
+    res = send_pipe_command({"cmd": "get_skin"})
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
+def set_skin(enabled: Optional[bool] = None, preset: Optional[int] = None, glow: Optional[int] = None,
+             scale: Optional[float] = None, transform: Optional[int] = None) -> Dict[str, Any]:
+    """Configures the skin changer overrides, glow, scale multiplier, and transformation presets."""
+    payload: Dict[str, Any] = {"cmd": "set_skin"}
+    if enabled is not None:
+        payload["enabled"] = bool(enabled)
+    if preset is not None:
+        payload["preset"] = int(preset)
+    if glow is not None:
+        payload["glow"] = int(glow)
+    if scale is not None:
+        payload["scale"] = float(scale)
+    if transform is not None:
+        payload["transform"] = int(transform)
+    res = send_pipe_command(payload)
+    if res is None:
+        return {"status": "offline", "game_connected": False}
+    res["game_connected"] = True
+    return res
+
+
 def query_buffs() -> Dict[str, Any]:
     """Retrieves all active player buffs and debuffs with level, duration remaining, and name."""
     res = send_pipe_command({"cmd": "get_buffs"})

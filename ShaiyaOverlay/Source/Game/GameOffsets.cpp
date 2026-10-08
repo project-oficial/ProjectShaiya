@@ -483,6 +483,24 @@ namespace ShaiyaOverlay
         else
             Logger::Error("  TargetTypeAddr  : FAILED (AOB not found)");
 
+        // 39. ReloadEquipment (CCharacter::ReloadEquipment)
+        U64 MatchReloadEquip = PatternScanner::ScanModule(nullptr, "48 89 5C 24 10 56 48 83 EC 20 33 F6 48 89 7C 24 30 48 89 71 7C");
+        Offsets.ReloadEquipmentAddr = MatchReloadEquip ? MatchReloadEquip : (ImageBase + 0x68140);
+        if (Offsets.ReloadEquipmentAddr)
+            Logger::Info("  ReloadEquipment : 0x%llX", Offsets.ReloadEquipmentAddr);
+
+        // 40. UpdateWeapons (CCharacter::UpdateWeapons)
+        U64 MatchUpdateWeapons = PatternScanner::ScanModule(nullptr, "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 30 48 8B D9");
+        Offsets.UpdateWeaponsAddr = MatchUpdateWeapons ? MatchUpdateWeapons : (ImageBase + 0x68680);
+        if (Offsets.UpdateWeaponsAddr)
+            Logger::Info("  UpdateWeapons   : 0x%llX", Offsets.UpdateWeaponsAddr);
+
+        // 41. ApplyCostume (CCharacter::ApplyCostume)
+        U64 MatchApplyCostume = PatternScanner::ScanModule(nullptr, "48 89 5C 24 08 57 48 83 EC 20 33 FF 48 8B D9 66 85 D2");
+        Offsets.ApplyCostumeAddr = MatchApplyCostume ? MatchApplyCostume : (ImageBase + 0x68CF0);
+        if (Offsets.ApplyCostumeAddr)
+            Logger::Info("  ApplyCostume    : 0x%llX", Offsets.ApplyCostumeAddr);
+
         bool Success = Offsets.WorldManager &&
                        Offsets.PlayerId &&
                        Offsets.PlayerCurrentHp &&

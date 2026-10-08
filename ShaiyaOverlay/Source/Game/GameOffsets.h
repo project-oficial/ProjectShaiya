@@ -54,6 +54,9 @@ namespace ShaiyaOverlay
         U64 SendCharBuffPacketAddr;
         U64 SendUseItemAddr;
         U64 TargetTypeAddr;
+        U64 ReloadEquipmentAddr;
+        U64 UpdateWeaponsAddr;
+        U64 ApplyCostumeAddr;
 
         // CWorldMgr offsets
         U32 CharacterMapOffset;

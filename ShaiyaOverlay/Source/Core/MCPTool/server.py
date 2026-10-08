@@ -119,6 +119,19 @@ def shaiya_get_buffs() -> dict:
 
 
 @mcp.tool()
+def shaiya_get_skin() -> dict:
+    """Get current skin changer configuration and visual overrides."""
+    return mcp_client.query_skin()
+
+
+@mcp.tool()
+def shaiya_set_skin(enabled: Optional[bool] = None, preset: Optional[int] = None, glow: Optional[int] = None,
+                    scale: Optional[float] = None, transform: Optional[int] = None) -> dict:
+    """Configure skin changer: enable/disable, select armor preset (1-5), weapon glow level (0-20), scale factor (0.5-2.5), and transformation preset (1=Titan, 2=Goddess, 3=Chibi)."""
+    return mcp_client.set_skin(enabled=enabled, preset=preset, glow=glow, scale=scale, transform=transform)
+
+
+@mcp.tool()
 def shaiya_auto_login(username: str = "", password: str = "") -> dict:
     """Automatically logs into account, selects server, and chooses character.
     If username/password are empty, uses credentials from auto_login.ini.

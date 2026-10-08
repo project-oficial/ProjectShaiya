@@ -4,6 +4,8 @@
 #include "Core/Logger.h"
 #include "UI/Renderer.h"
 #include "UI/Menu.h"
+#include "Interface/Blade/BladeBridge.h"
+#include "Security/ProtectMacro.h"
 
 namespace ShaiyaOverlay
 {
@@ -221,6 +223,16 @@ namespace ShaiyaOverlay
                     if (Renderer::InitializeD3D11(Desc.OutputWindow, Device, Context))
                     {
                         IsInitialized = true;
+                        BladeBridge::Initialize();
+                        BladeBridge::CreateDeviceObjects(Device);
+                        if (s_info.m_theme_ptr)
+                        {
+                            const auto* theme = reinterpret_cast<const SharedTheme*>(s_info.m_theme_ptr);
+                            if (theme && !IsBadReadPtr(theme, sizeof(SharedTheme)) && theme->nId != 0)
+                            {
+                                BladeBridge::ApplyWhiteLabel(*theme);
+                            }
+                        }
                         Logger::Info("D3D11 HookedPresent: Renderer initialized successfully.");
                     }
                     else
