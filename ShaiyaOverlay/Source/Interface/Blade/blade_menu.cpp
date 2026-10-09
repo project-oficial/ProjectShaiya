@@ -1066,6 +1066,37 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
             col.Row(pstra("Click below to auto-walk to Quest NPC or Monster Spot"), true);
         }
 
+        // Active Quest Solution Target (Yellow Snapline)
+        const ShaiyaOverlay::QuestMarker* activeTurnIn = nullptr;
+        for (U32 k = 0; k < markers.GetCount(); ++k)
+        {
+            if (markers[k].IsTurnIn)
+            {
+                if (!activeTurnIn || markers[k].Distance < activeTurnIn->Distance)
+                    activeTurnIn = &markers[k];
+            }
+        }
+
+        if (activeTurnIn)
+        {
+            col.y += 6.0f;
+            col.Section(pstra("Active Quest Solution (Yellow Snapline)"), 1);
+            char turnInBuf[128];
+            snprintf(turnInBuf, sizeof(turnInBuf), pstra("[TARGET] %s (%.0fm)"),
+                     activeTurnIn->NpcName, activeTurnIn->Distance);
+            float rcy_turnin = col.Row(turnInBuf, false, nullptr, 130.0f);
+            float btn_w = 115.0f, btn_h = 24.0f;
+            ImVec2 bturnin_min(col.x + col.w - cp - btn_w, rcy_turnin - btn_h * 0.5f);
+            ImVec2 bturnin_max(col.x + col.w - cp, rcy_turnin + btn_h * 0.5f);
+            PushAlpha(col.a);
+            if (Button(pstra("##btn_go_active_turnin"), bturnin_min, bturnin_max, pstra("Go to Target"), true))
+            {
+                ShaiyaOverlay::NavigationManager::WalkTo(activeTurnIn->Position, activeTurnIn->NpcName, 2.5f);
+                Blade::PushNotification(pstra("Walking to quest solution target..."), NT_INFO);
+            }
+            PopAlpha();
+        }
+
         col.y += 12.0f;
 
         // Block 1 (Top Block): Active Quests with Filter & Inner Scroll

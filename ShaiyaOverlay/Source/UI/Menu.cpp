@@ -1081,7 +1081,7 @@ namespace ShaiyaOverlay
         }
 
         // 2. Draw destination waypoints for Turn-In NPCs from live game Radar Markers
-        const FixedList<QuestMarker, 32>& Markers = QuestManager::GetQuestMarkers();
+        const FixedList<QuestMarker, 64>& Markers = QuestManager::GetQuestMarkers();
         U32 MarkerCount = Markers.GetCount();
 
         for (U32 K = 0; K < MarkerCount; ++K)

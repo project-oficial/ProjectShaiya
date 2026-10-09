@@ -21,7 +21,7 @@ namespace ShaiyaOverlay
         static const FixedList<ActiveQuest, 16>& GetActiveQuests() { return Quests; }
         static U32 GetQuestCount() { return Quests.GetCount(); }
 
-        static const FixedList<QuestMarker, 32>& GetQuestMarkers() { return Markers; }
+        static const FixedList<QuestMarker, 64>& GetQuestMarkers() { return Markers; }
         static U32 GetMarkerCount() { return Markers.GetCount(); }
 
         static bool FindNpcPosition(U32 NpcId, Vector3& OutPos);
@@ -41,7 +41,7 @@ namespace ShaiyaOverlay
         static void LoadMobCache();
 
         static FixedList<ActiveQuest, 16> Quests;
-        static FixedList<QuestMarker, 32> Markers;
+        static FixedList<QuestMarker, 64> Markers;
         static FixedList<SavedQuestMob, 128> SavedMobCache;
         static bool MobCacheLoaded;
     };

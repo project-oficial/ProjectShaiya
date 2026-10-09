@@ -12,7 +12,7 @@
 namespace ShaiyaOverlay
 {
     FixedList<ActiveQuest, 16> QuestManager::Quests;
-    FixedList<QuestMarker, 32> QuestManager::Markers;
+    FixedList<QuestMarker, 64> QuestManager::Markers;
     FixedList<SavedQuestMob, 128> QuestManager::SavedMobCache;
     bool QuestManager::MobCacheLoaded = false;
 
@@ -676,6 +676,21 @@ namespace ShaiyaOverlay
                 StringUtils::Copy(Quest.DestinationName, "-", sizeof(Quest.DestinationName));
             }
 
+            // Check live radar Markers for active Turn-in marker (? on map)
+            for (U32 k = 0; k < Markers.GetCount(); ++k)
+            {
+                if (Markers[k].IsTurnIn && (Markers[k].QuestId == Quest.QuestId || (Quest.HasDestination && Markers[k].Position.DistanceTo(Quest.DestinationPos) < 5.0f)))
+                {
+                    Quest.DestinationPos = Markers[k].Position;
+                    Quest.HasDestination = true;
+                    if (Markers[k].NpcName[0] != '\0' && strcmp(Markers[k].NpcName, "Turn-in NPC") != 0)
+                        StringUtils::Copy(Quest.DestinationName, Markers[k].NpcName, sizeof(Quest.DestinationName));
+                    if (Player.Valid)
+                        Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
+                    break;
+                }
+            }
+
             // If Start NPC was not found in database, fallback to Destination NPC if available
             if (!Quest.HasStartNpc && Quest.HasDestination)
             {
@@ -733,9 +748,9 @@ namespace ShaiyaOverlay
         if (!Memory::ReadSafe(Offsets.QuestMarkerList + 0x10, &Node) || !Node)
             return;
 
-        FixedList<QuestMarker, 32> NewMarkers;
+        FixedList<QuestMarker, 64> NewMarkers;
         U32 MarkerWalk = 0;
-        while (Node && Node != Offsets.QuestMarkerList && MarkerWalk < 32)
+        while (Node && Node != Offsets.QuestMarkerList && MarkerWalk < 64)
         {
             U64 ItemPtr = 0;
             U64 NextNode = 0;
@@ -778,6 +793,33 @@ namespace ShaiyaOverlay
                         Marker.Position = Npc.Pos;
                         StringUtils::Copy(Marker.NpcName, Npc.Name, sizeof(Marker.NpcName));
                         break;
+                    }
+                }
+
+                // If name not found in live stream, search useful NPCs table
+                if (strcmp(Marker.NpcName, "Turn-in NPC") == 0 || strcmp(Marker.NpcName, "Quest NPC") == 0)
+                {
+                    const auto& useful = WaypointManager::GetUsefulNpcs();
+                    for (U32 u = 0; u < useful.GetCount(); ++u)
+                    {
+                        if (useful[u].Position.DistanceTo(Marker.Position) < 3.5f)
+                        {
+                            StringUtils::Copy(Marker.NpcName, useful[u].Name, sizeof(Marker.NpcName));
+                            break;
+                        }
+                    }
+                }
+
+                // If game placed turn-in marker with Qid == 0, link to active quest at this destination
+                if (Marker.IsTurnIn && Marker.QuestId == 0)
+                {
+                    for (U32 q = 0; q < Quests.GetCount(); ++q)
+                    {
+                        if (Quests[q].HasDestination && Quests[q].DestinationPos.DistanceTo(Marker.Position) < 5.0f)
+                        {
+                            Marker.QuestId = Quests[q].QuestId;
+                            break;
+                        }
                     }
                 }
 
