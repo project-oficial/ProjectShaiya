@@ -142,6 +142,32 @@ namespace ShaiyaOverlay
         return Substr(NormH, HLen, NormN, NLen) || Substr(NormN, NLen, NormH, HLen);
     }
 
+    bool StringUtils::ContainsCaseInsensitive(const char* Haystack, const char* Needle)
+    {
+        if (!Haystack || !Needle) return false;
+        if (Needle[0] == '\0') return true;
+
+        char NormH[128] = { 0 };
+        char NormN[128] = { 0 };
+        Copy(NormH, Haystack, sizeof(NormH));
+        Copy(NormN, Needle, sizeof(NormN));
+        NormalizeAccents(NormH, sizeof(NormH), false);
+        NormalizeAccents(NormN, sizeof(NormN), false);
+
+        for (const char* h = NormH; *h; ++h)
+        {
+            const char* a = h;
+            const char* b = NormN;
+            while (*a && *b && tolower(static_cast<unsigned char>(*a)) == tolower(static_cast<unsigned char>(*b)))
+            {
+                ++a;
+                ++b;
+            }
+            if (!*b) return true;
+        }
+        return false;
+    }
+
     void StringUtils::AnsiToUtf8(const char* AnsiStr, char* Utf8Str, U32 MaxLen)
     {
         if (!AnsiStr || !Utf8Str || MaxLen == 0) return;

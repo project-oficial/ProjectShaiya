@@ -58,10 +58,12 @@ static const Module kLoot[] = {
 static const Module kSupport[] = {
     { pstra("Auto-Heal"), nullptr, 0 },
     { pstra("Auto-Buff"), nullptr, 0 },
+    { pstra("Quest List"), nullptr, 0 },
+    { pstra("Navigator"), nullptr, 0 },
 };
 static const Module kSettings[] = {
     { pstra("Interface"), nullptr, 0 },
-    { pstra("White Label"), nullptr, 0 },
+    { pstra("Themes"), nullptr, 0 },
 };
 
 const Blade::Module* Blade::GetModules(int tab, int* out_count)

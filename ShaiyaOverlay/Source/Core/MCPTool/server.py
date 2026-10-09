@@ -210,6 +210,18 @@ def shaiya_set_config(key: str, value: bool) -> dict:
 
 
 @mcp.tool()
+def shaiya_set_autoloot(enabled: Optional[bool] = None, only_my_drops: Optional[bool] = None,
+                        auto_walk: Optional[bool] = None, radius: Optional[float] = None,
+                        loot_all: Optional[bool] = None,
+                        add_filter: Optional[str] = None, remove_filter: Optional[int] = None,
+                        clear_filter: Optional[bool] = None) -> dict:
+    """Configures the automatic ground loot pickup system, loot all toggle, and item name filter whitelist."""
+    return mcp_client.set_autoloot(enabled=enabled, only_my_drops=only_my_drops,
+                                   auto_walk=auto_walk, radius=radius, loot_all=loot_all,
+                                   add_filter=add_filter, remove_filter=remove_filter, clear_filter=clear_filter)
+
+
+@mcp.tool()
 def shaiya_unload() -> dict:
     """Unload and eject ShaiyaOverlay.dll from the game process cleanly."""
     return mcp_client.unload_dll()

@@ -126,9 +126,6 @@ namespace Shaiya::Config
     {
         bool Enable = true;
         bool MonsterEsp = true;
-        bool MonsterBox = true;
-        bool MonsterName = true;
-        bool MonsterHp = true;
         bool MonsterDist = true;
         ImVec4 MonsterColor = ImVec4(0.9f, 0.2f, 0.2f, 1.0f);
 
@@ -146,9 +143,6 @@ namespace Shaiya::Config
         {
             Enable = true;
             MonsterEsp = true;
-            MonsterBox = true;
-            MonsterName = true;
-            MonsterHp = true;
             MonsterDist = true;
             MonsterColor = ImVec4(0.9f, 0.2f, 0.2f, 1.0f);
             NpcEsp = true;

@@ -216,8 +216,11 @@ def pickup_item(world_id: int) -> Dict[str, Any]:
 
 
 def set_autoloot(enabled: Optional[bool] = None, only_my_drops: Optional[bool] = None,
-                 auto_walk: Optional[bool] = None, radius: Optional[float] = None) -> Dict[str, Any]:
-    """Configures the automatic loot pickup system."""
+                 auto_walk: Optional[bool] = None, radius: Optional[float] = None,
+                 loot_all: Optional[bool] = None,
+                 add_filter: Optional[str] = None, remove_filter: Optional[int] = None,
+                 clear_filter: Optional[bool] = None) -> Dict[str, Any]:
+    """Configures the automatic loot pickup system and name filter whitelist."""
     payload: Dict[str, Any] = {"cmd": "set_autoloot"}
     if enabled is not None:
         payload["enabled"] = bool(enabled)
@@ -227,6 +230,14 @@ def set_autoloot(enabled: Optional[bool] = None, only_my_drops: Optional[bool] =
         payload["auto_walk"] = bool(auto_walk)
     if radius is not None:
         payload["radius"] = float(radius)
+    if loot_all is not None:
+        payload["loot_all"] = bool(loot_all)
+    if add_filter is not None:
+        payload["add_filter"] = str(add_filter)
+    if remove_filter is not None:
+        payload["remove_filter"] = int(remove_filter)
+    if clear_filter is not None:
+        payload["clear_filter"] = bool(clear_filter)
     res = send_pipe_command(payload)
     if res is None:
         return {"status": "offline", "game_connected": False}

@@ -37,66 +37,6 @@ static ImU32 ColorU32(const ImColor& color, float alpha = 1.0f)
     return ImGui::GetColorU32(value);
 }
 
-static ImU32 Vec4ToU32(const ImVec4& color, float alpha = 1.0f)
-{
-    ImVec4 value = color;
-    value.w = alpha;
-    return ImGui::GetColorU32(value);
-}
-
-enum Joint
-{
-    J_HEAD, J_CHEST, J_SHOULDER_L, J_SHOULDER_R,
-    J_ELBOW_L, J_ELBOW_R, J_HAND_L, J_HAND_R,
-    J_PELVIS, J_KNEE_L, J_KNEE_R, J_FOOT_L, J_FOOT_R,
-    J_COUNT
-};
-
-static const ImVec2 kJoints[J_COUNT] = {
-    ImVec2(0.498f, 0.039f),
-    ImVec2(0.546f, 0.180f),
-    ImVec2(0.325f, 0.164f),
-    ImVec2(0.768f, 0.182f),
-    ImVec2(0.287f, 0.344f),
-    ImVec2(0.909f, 0.347f),
-    ImVec2(0.222f, 0.449f),
-    ImVec2(0.931f, 0.367f),
-    ImVec2(0.568f, 0.447f),
-    ImVec2(0.390f, 0.673f),
-    ImVec2(0.709f, 0.683f),
-    ImVec2(0.260f, 0.966f),
-    ImVec2(0.806f, 0.966f),
-};
-
-static float g_esp_t0 = -100.0f;
-static float EspBuild(float delay, float dur = 0.42f)
-{
-    Settings::sInterface& ui = Ui();
-    if (IsWhiteLabel() || !ui.IntroAnimation) return 1.0f;
-    float speed = ImMax(ui.AnimationSpeed, 0.05f) * ImMax(ui.EspBuild, 0.05f);
-    float el = ((float)ImGui::GetTime() - g_esp_t0) * speed - delay;
-    if (el <= 0.0f) return 0.0f;
-    float t = ImClamp(el / ImMax(dur, 0.01f), 0.0f, 1.0f);
-    float inv = 1.0f - t;
-    return 1.0f - inv * inv * inv;
-}
-
-struct Bone { Joint a, b; };
-static const Bone kBones[] = {
-    { J_CHEST,      J_HEAD       },
-    { J_SHOULDER_L, J_SHOULDER_R },
-    { J_CHEST,      J_PELVIS     },
-    { J_SHOULDER_L, J_ELBOW_L    },
-    { J_SHOULDER_R, J_ELBOW_R    },
-    { J_ELBOW_L,    J_HAND_L     },
-    { J_ELBOW_R,    J_HAND_R     },
-    { J_PELVIS,     J_KNEE_L     },
-    { J_PELVIS,     J_KNEE_R     },
-    { J_KNEE_L,     J_FOOT_L     },
-    { J_KNEE_R,     J_FOOT_R     },
-};
-static const int kBoneCount = IM_ARRAYSIZE(kBones);
-
 static const float VROW_H = 40.0f;
 
 struct VCol
@@ -199,80 +139,6 @@ static bool ActionButton(VCol& c, const char* id, const char* label, bool accent
     bool pressed = Button(id, bmin, bmax, label, accent);
     PopAlpha();
     return pressed;
-}
-
-static void DrawEspPreview(ImDrawList* dl, ImVec2 min, ImVec2 max, Shaiya::Config::VisualsConfig& cfg)
-{
-    RectFilled(dl, min, max, C.row, 12.0f);
-
-    const float w = max.x - min.x;
-    const float top = min.y + 54.0f;
-    const float bot = max.y - 58.0f;
-    float ch = bot - top;
-    float ar = (TexCharSz.y > 0.0f) ? (TexCharSz.x / TexCharSz.y) : 0.476f;
-    float cw = ch * ar;
-    if (cw > w * 0.42f) { cw = w * 0.42f; ch = cw / ar; }
-
-    ImVec2 cmin(min.x + (w - cw) * 0.5f, top + (bot - top - ch) * 0.5f);
-    ImVec2 cmax(cmin.x + cw, cmin.y + ch);
-
-    const float ex = 14.0f, ey = 10.0f;
-    ImVec2 bmin(cmin.x - ex, cmin.y - ey), bmax(cmax.x + ex, cmax.y + ey);
-    float boxA = EspBuild(0.20f);
-
-    if (TexChar && !IsWhiteLabel())
-    {
-        float a = IntroT(0.18f);
-        dl->AddImage(TexChar, cmin, cmax, TexCharUV0, TexCharUV1,
-                     IM_COL32(255, 255, 255, (int)(255 * a)));
-    }
-
-    // Snapline
-    if (cfg.Enable && cfg.MonsterEsp && cfg.LootSnaplines)
-    {
-        float a = EspBuild(0.18f);
-        ImU32 line_col = Vec4ToU32(cfg.MonsterColor);
-        dl->AddLine(ImVec2((min.x + max.x) * 0.5f, max.y - 22.0f),
-                    ImVec2((bmin.x + bmax.x) * 0.5f, bmax.y),
-                    Fade(line_col, a), 1.5f);
-    }
-
-    // Box
-    if (cfg.Enable && cfg.MonsterEsp && cfg.MonsterBox && boxA > 0.01f)
-    {
-        ImU32 col = Vec4ToU32(cfg.MonsterColor, boxA);
-        RectStroke(dl, bmin, bmax, col, 3.0f, ImDrawCornerFlags_All, 1.5f);
-    }
-
-    // Name & Distance (Top of Box)
-    if (cfg.Enable && cfg.MonsterEsp && (cfg.MonsterName || cfg.MonsterDist))
-    {
-        char label[64];
-        if (cfg.MonsterName && cfg.MonsterDist)
-            snprintf(label, sizeof(label), pstra("Globin do Pantano [Lv.14] (12m)"));
-        else if (cfg.MonsterName)
-            snprintf(label, sizeof(label), pstra("Globin do Pantano [Lv.14]"));
-        else
-            snprintf(label, sizeof(label), pstra("(12m)"));
-
-        ImVec2 tsz = Measure(F_Small, label);
-        ImVec2 pos(cmin.x + (cw - tsz.x) * 0.5f, bmin.y - tsz.y - 4.0f);
-        TextAt(dl, F_Small, pos, Vec4ToU32(cfg.MonsterColor), label);
-    }
-
-    // Health Bar (Left of Box)
-    if (cfg.Enable && cfg.MonsterEsp && cfg.MonsterHp)
-    {
-        const float bar_w = 4.0f;
-        const float bar_h = bmax.y - bmin.y;
-        ImVec2 hmin(bmin.x - bar_w - 4.0f, bmin.y);
-        ImVec2 hmax(bmin.x - 4.0f, bmax.y);
-        dl->AddRectFilled(hmin, hmax, IM_COL32(20, 20, 20, 200), 1.0f);
-        float hp_ratio = 0.72f;
-        ImVec2 hp_top(hmin.x, bmax.y - bar_h * hp_ratio);
-        dl->AddRectFilled(hp_top, hmax, IM_COL32(220, 60, 60, 255), 1.0f);
-        dl->AddRect(hmin, hmax, IM_COL32(0, 0, 0, 180), 1.0f);
-    }
 }
 
 void Blade::DrawVisualsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
@@ -470,22 +336,19 @@ void Blade::DrawVisualsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
     }
 
     // Module 0: Entity ESP (Monsters & NPCs)
-    const float available_w = cw - pad * 2.0f - gap;
-    const float default_preview_w = available_w * 0.52f;
-    const float right_w = white_label ? default_preview_w * 0.85f : default_preview_w;
-    const float left_w = available_w - right_w;
+    const float col_w = (cw - pad * 2.0f - gap) * 0.5f;
 
-    ImVec2 left_min(cx0 + pad, view_y0), left_max(cx0 + pad + left_w, view_y1);
-    if (ImGui::IsMouseHoveringRect(left_min, left_max) && ImGui::GetIO().MouseWheel != 0.0f)
+    if (ImGui::IsMouseHoveringRect(full_min, full_max) && ImGui::GetIO().MouseWheel != 0.0f)
         scroll -= ImGui::GetIO().MouseWheel * 42.0f;
     scroll = ImClamp(scroll, 0.0f, ImMax(content_h - view_h, 0.0f));
 
     dl->PushClipRect(full_min, full_max, true);
 
-    VCol L; L.dl = dl; L.x = cx0 + pad; L.y = view_y0 - scroll; L.w = left_w;
+    VCol L{ dl, cx0 + pad, view_y0 - scroll, col_w };
+    VCol R{ dl, cx0 + pad + col_w + gap, view_y0 - scroll, col_w };
     const float base_y = L.y;
 
-    L.Card(5);
+    L.Card(3);
     {
         float cy = L.Row(nullptr);
         PushAlpha(L.a);
@@ -496,10 +359,8 @@ void Blade::DrawVisualsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         Toggle(pstra("##v_mob_esp"), ImVec2(L.x + L.w - 14.0f, cy), &cfg.MonsterEsp, 32.0f, 17.0f);
         PopAlpha();
     }
-    DotAndCheck(L, L.Row(pstra("2D Box")), pstra("##v_mob_box"), &cfg.MonsterBox, cfg.MonsterColor, pstra("Monster Box"));
-    ToggleRow(L, pstra("Show Name & Level"), pstra("##v_mob_name"), &cfg.MonsterName);
-    ToggleRow(L, pstra("Health Bar"), pstra("##v_mob_hp"), &cfg.MonsterHp);
-    ToggleRow(L, pstra("Distance"), pstra("##v_mob_dist"), &cfg.MonsterDist);
+    ToggleRow(L, pstra("Distance Tag"), pstra("##v_mob_dist"), &cfg.MonsterDist);
+    Dot(L, L.Row(pstra("Marker Color")), pstra("##v_mob_col"), cfg.MonsterColor, pstra("Marker Color"));
 
     L.y += gap;
     L.Card(2);
@@ -513,16 +374,18 @@ void Blade::DrawVisualsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
     }
     Dot(L, L.Row(pstra("NPC Color")), pstra("##v_npc_col"), cfg.NpcColor, pstra("NPC Color"));
 
-    content_h = L.y - base_y;
+    R.Card(3);
+    R.Row(pstra("Visual Information"), F_Small);
+    R.Row(pstra("Name, HP & Level displayed by game natively"), F_Small);
+    R.Row(pstra("Overlay displays clean distance indicator"), F_Small);
 
-    DrawEspPreview(dl, ImVec2(cx0 + pad + left_w + gap, view_y0),
-                   ImVec2(cx0 + pad + left_w + gap + right_w, view_y1), cfg);
+    content_h = ImMax(L.y, R.y) - base_y;
 
     dl->PopClipRect();
 
     if (content_h > view_h)
     {
-        float track_x = cx0 + pad + left_w + 5.0f;
+        float track_x = max.x - 7.0f;
         float ratio = view_h / content_h;
         float bar_h = ImMax(view_h * ratio, 24.0f);
         float bar_y = view_y0 + (view_h - bar_h) * (scroll / ImMax(content_h - view_h, 1.0f));

@@ -119,6 +119,7 @@
     <ClInclude Include="Source\Game\Items\InventoryManager.h" />
     <ClInclude Include="Source\Game\Login\AutoLoginManager.h" />
     <ClInclude Include="Source\Game\Navigation\NavigationManager.h" />
+    <ClInclude Include="Source\Game\Navigation\WaypointManager.h" />
     <ClInclude Include="Source\Game\Quests\Quest.h" />
     <ClInclude Include="Source\Game\Quests\QuestManager.h" />
     <ClInclude Include="Source\Game\QuickSlots\QuickSlot.h" />
@@ -196,6 +197,7 @@
     <ClCompile Include="Source\Game\Items\InventoryManager.cpp" />
     <ClCompile Include="Source\Game\Login\AutoLoginManager.cpp" />
     <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp" />
+    <ClCompile Include="Source\Game\Navigation\WaypointManager.cpp" />
     <ClCompile Include="Source\Game\Quests\QuestManager.cpp" />
     <ClCompile Include="Source\Game\QuickSlots\QuickSlotManager.cpp" />
     <ClCompile Include="Source\Game\Skills\SkillManager.cpp" />

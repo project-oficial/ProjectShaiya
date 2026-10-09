@@ -661,12 +661,57 @@ namespace ShaiyaOverlay
             if (extract_json_double(pRequest, "radius", radius) && radius > 0.5)
                 cfg.PickupRadius = static_cast<float>(radius);
 
-            sprintf_s(pResponse, nMaxLen,
-                "{\"status\":\"ok\",\"action\":\"set_autoloot\",\"enabled\":%s,\"only_my_drops\":%s,\"auto_walk\":%s,\"radius\":%.1f}",
+            bool lootAll = cfg.LootAllIgnoreFilter;
+            if (extract_json_bool(pRequest, "loot_all", lootAll))
+                cfg.LootAllIgnoreFilter = lootAll;
+            if (extract_json_bool(pRequest, "ignore_filter", lootAll))
+                cfg.LootAllIgnoreFilter = lootAll;
+
+            char filterBuf[64] = { 0 };
+            if (extract_json_string(pRequest, "add_filter", filterBuf, sizeof(filterBuf)))
+            {
+                GroundItemManager::AddFilterItem(filterBuf);
+            }
+
+            double removeIdx = -1.0;
+            if (extract_json_double(pRequest, "remove_filter", removeIdx) && removeIdx >= 0.0)
+            {
+                GroundItemManager::RemoveFilterItem(static_cast<U32>(removeIdx));
+            }
+
+            bool clearFlt = false;
+            if (extract_json_bool(pRequest, "clear_filter", clearFlt) && clearFlt)
+            {
+                GroundItemManager::ClearFilterList();
+            }
+
+            GroundItemManager::SaveConfig();
+
+            const auto& flt = GroundItemManager::GetFilterList();
+            int written = sprintf_s(pResponse, nMaxLen,
+                "{\"status\":\"ok\",\"action\":\"set_autoloot\",\"enabled\":%s,\"loot_all\":%s,\"only_my_drops\":%s,\"auto_walk\":%s,\"radius\":%.1f,\"filter_count\":%u,\"filter_items\":[",
                 cfg.Enabled ? "true" : "false",
+                cfg.LootAllIgnoreFilter ? "true" : "false",
                 cfg.OnlyMyDrops ? "true" : "false",
                 cfg.AutoWalkToLoot ? "true" : "false",
-                cfg.PickupRadius);
+                cfg.PickupRadius,
+                flt.GetCount());
+
+            if (written > 0)
+            {
+                size_t offset = static_cast<size_t>(written);
+                for (U32 i = 0; i < flt.GetCount(); ++i)
+                {
+                    char itemBuf[96];
+                    int len = sprintf_s(itemBuf, sizeof(itemBuf), "%s\"%s\"", (i > 0) ? "," : "", flt[i].Name);
+                    if (len > 0 && (offset + len + 8) < nMaxLen)
+                    {
+                        memcpy(pResponse + offset, itemBuf, len);
+                        offset += len;
+                    }
+                }
+                sprintf_s(pResponse + offset, nMaxLen - offset, "]}");
+            }
         }
 
         static void HandleSetAutoBuff(const char* pRequest, char* pResponse, size_t nMaxLen)

@@ -150,6 +150,9 @@
     <ClInclude Include="Source\Game\Navigation\NavigationManager.h">
       <Filter>Source\Game\Navigation</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Game\Navigation\WaypointManager.h">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Game\Quests\Quest.h">
       <Filter>Source\Game\Quests</Filter>
     </ClInclude>
@@ -375,6 +378,9 @@
       <Filter>Source\Game\Login</Filter>
     </ClCompile>
     <ClCompile Include="Source\Game\Navigation\NavigationManager.cpp">
+      <Filter>Source\Game\Navigation</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Game\Navigation\WaypointManager.cpp">
       <Filter>Source\Game\Navigation</Filter>
     </ClCompile>
     <ClCompile Include="Source\Game\Quests\QuestManager.cpp">

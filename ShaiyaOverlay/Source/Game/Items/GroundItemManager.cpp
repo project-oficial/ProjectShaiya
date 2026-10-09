@@ -5,12 +5,151 @@
 #include "Game/GameOffsets.h"
 #include "Game/Entities/EntityManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include <stdio.h>
 
 namespace ShaiyaOverlay
 {
     FixedList<GroundItem, 128> GroundItemManager::Items;
+    FixedList<LootFilterEntry, 64> GroundItemManager::FilterList;
     AutoLootConfig GroundItemManager::Config;
     U32 GroundItemManager::LastLootTick = 0;
+    static bool ConfigLoaded = false;
+
+    void GroundItemManager::LoadConfig()
+    {
+        char IniPath[MAX_PATH];
+        GetCurrentDirectoryA(MAX_PATH, IniPath);
+        strcat_s(IniPath, "\\auto_loot.ini");
+
+        Config.Enabled = (GetPrivateProfileIntA("AutoLoot", "Enabled", 0, IniPath) != 0);
+        Config.OnlyMyDrops = (GetPrivateProfileIntA("AutoLoot", "OnlyMyDrops", 1, IniPath) != 0);
+
+        char BufRadius[32] = { 0 };
+        GetPrivateProfileStringA("AutoLoot", "PickupRadius", "3.5", BufRadius, sizeof(BufRadius), IniPath);
+        Config.PickupRadius = static_cast<F32>(atof(BufRadius));
+        if (Config.PickupRadius <= 0.0f) Config.PickupRadius = 3.5f;
+
+        Config.AutoWalkToLoot = (GetPrivateProfileIntA("AutoLoot", "AutoWalkToLoot", 0, IniPath) != 0);
+
+        char BufWalk[32] = { 0 };
+        GetPrivateProfileStringA("AutoLoot", "MaxWalkDistance", "25.0", BufWalk, sizeof(BufWalk), IniPath);
+        Config.MaxWalkDistance = static_cast<F32>(atof(BufWalk));
+        if (Config.MaxWalkDistance <= 0.0f) Config.MaxWalkDistance = 25.0f;
+
+        Config.LootAllIgnoreFilter = (GetPrivateProfileIntA("AutoLoot", "LootAllIgnoreFilter", 0, IniPath) != 0);
+
+        FilterList.Clear();
+        char sectionBuffer[4096] = { 0 };
+        DWORD bytesRead = GetPrivateProfileSectionA("LootFilterList", sectionBuffer, sizeof(sectionBuffer), IniPath);
+        if (bytesRead > 0)
+        {
+            char* p = sectionBuffer;
+            while (*p)
+            {
+                char* eq = strchr(p, '=');
+                if (eq)
+                {
+                    const char* val = eq + 1;
+                    if (val[0] != '\0')
+                    {
+                        LootFilterEntry Entry = { 0 };
+                        StringUtils::Copy(Entry.Name, val, sizeof(Entry.Name));
+                        StringUtils::NormalizeAccents(Entry.Name, sizeof(Entry.Name), false);
+                        FilterList.Add(Entry);
+                    }
+                }
+                p += strlen(p) + 1;
+            }
+        }
+
+        ConfigLoaded = true;
+    }
+
+    void GroundItemManager::SaveConfig()
+    {
+        char IniPath[MAX_PATH];
+        GetCurrentDirectoryA(MAX_PATH, IniPath);
+        strcat_s(IniPath, "\\auto_loot.ini");
+
+        WritePrivateProfileStringA("AutoLoot", "Enabled", Config.Enabled ? "1" : "0", IniPath);
+        WritePrivateProfileStringA("AutoLoot", "OnlyMyDrops", Config.OnlyMyDrops ? "1" : "0", IniPath);
+
+        char BufRadius[32];
+        sprintf_s(BufRadius, "%.1f", Config.PickupRadius);
+        WritePrivateProfileStringA("AutoLoot", "PickupRadius", BufRadius, IniPath);
+
+        WritePrivateProfileStringA("AutoLoot", "AutoWalkToLoot", Config.AutoWalkToLoot ? "1" : "0", IniPath);
+
+        char BufWalk[32];
+        sprintf_s(BufWalk, "%.1f", Config.MaxWalkDistance);
+        WritePrivateProfileStringA("AutoLoot", "MaxWalkDistance", BufWalk, IniPath);
+
+        WritePrivateProfileStringA("AutoLoot", "LootAllIgnoreFilter", Config.LootAllIgnoreFilter ? "1" : "0", IniPath);
+
+        WritePrivateProfileStringA("LootFilterList", nullptr, nullptr, IniPath);
+        for (U32 i = 0; i < FilterList.GetCount(); ++i)
+        {
+            char key[16];
+            sprintf_s(key, "Item%u", i);
+            WritePrivateProfileStringA("LootFilterList", key, FilterList[i].Name, IniPath);
+        }
+    }
+
+    bool GroundItemManager::AddFilterItem(const char* Name)
+    {
+        if (!Name || Name[0] == '\0')
+            return false;
+
+        char Clean[64] = { 0 };
+        StringUtils::Copy(Clean, Name, sizeof(Clean));
+        StringUtils::NormalizeAccents(Clean, sizeof(Clean), false);
+
+        for (U32 i = 0; i < FilterList.GetCount(); ++i)
+        {
+            if (StringUtils::Equals(FilterList[i].Name, Clean))
+                return false;
+        }
+
+        LootFilterEntry Entry = { 0 };
+        StringUtils::Copy(Entry.Name, Clean, sizeof(Entry.Name));
+        bool ok = FilterList.Add(Entry);
+        if (ok)
+            SaveConfig();
+        return ok;
+    }
+
+    bool GroundItemManager::RemoveFilterItem(U32 Index)
+    {
+        bool ok = FilterList.RemoveAt(Index);
+        if (ok)
+            SaveConfig();
+        return ok;
+    }
+
+    void GroundItemManager::ClearFilterList()
+    {
+        FilterList.Clear();
+        SaveConfig();
+    }
+
+    bool GroundItemManager::IsFilterMatching(const char* ItemName)
+    {
+        if (Config.LootAllIgnoreFilter)
+            return true;
+
+        if (FilterList.GetCount() == 0)
+            return true;
+
+        if (!ItemName || ItemName[0] == '\0')
+            return false;
+
+        for (U32 i = 0; i < FilterList.GetCount(); ++i)
+        {
+            if (StringUtils::ContainsCaseInsensitive(ItemName, FilterList[i].Name))
+                return true;
+        }
+        return false;
+    }
 
     bool GroundItemManager::PickUp(U32 ItemWorldId)
     {
@@ -108,6 +247,9 @@ namespace ShaiyaOverlay
 
     void GroundItemManager::Update()
     {
+        if (!ConfigLoaded)
+            LoadConfig();
+
         Items.Clear();
 
         if (!Offsets.WorldManager)
@@ -188,6 +330,10 @@ namespace ShaiyaOverlay
 
                 // Ownership filter: only pick up items owned by player or free-for-all
                 if (Config.OnlyMyDrops && Item.OwnerId != 0 && Item.OwnerId != Player.Id)
+                    continue;
+
+                // Name filter list: only pick up items matching the filter list (or all if list is empty)
+                if (!IsFilterMatching(Item.Name))
                     continue;
 
                 // 1. Direct pickup if within pickup radius

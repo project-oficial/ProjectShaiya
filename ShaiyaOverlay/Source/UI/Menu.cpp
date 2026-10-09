@@ -17,6 +17,7 @@
 #include "Game/QuickSlots/QuickSlotManager.h"
 #include "Game/Quests/QuestManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include "Game/Navigation/WaypointManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "Core/MCPTool/MCPBridge.h"
 #include "Interface/Blade/blade_ui.hpp"
@@ -56,6 +57,7 @@ namespace ShaiyaOverlay
         QuickSlotManager::Update();
         QuestManager::Update();
         NavigationManager::Update();
+        WaypointManager::Update();
         ComboManager::Update();
         HealManager::Update();
         GrindBot::Update();
@@ -1191,42 +1193,14 @@ namespace ShaiyaOverlay
             if (!Camera::WorldToScreen(headPos, headScreen, ScreenW, ScreenH))
                 continue;
 
-            float boxH = fabsf(screenPos.Y - headScreen.Y);
-            if (boxH < 8.0f) boxH = 8.0f;
-            float boxW = boxH * 0.55f;
-
-            ImVec2 bmin(screenPos.X - boxW * 0.5f, headScreen.Y);
-            ImVec2 bmax(screenPos.X + boxW * 0.5f, screenPos.Y);
-
             ImU32 col = ImGui::ColorConvertFloat4ToU32(cfg.MonsterColor);
 
-            if (cfg.MonsterBox)
-                dl->AddRect(bmin, bmax, col, 2.0f, 0, 1.2f);
-
-            if (cfg.MonsterName || cfg.MonsterDist)
+            if (cfg.MonsterDist)
             {
-                char buf[64];
-                if (cfg.MonsterName && cfg.MonsterDist)
-                    snprintf(buf, sizeof(buf), "%s [%.0fm]", m.Name, m.Distance);
-                else if (cfg.MonsterName)
-                    snprintf(buf, sizeof(buf), "%s", m.Name);
-                else
-                    snprintf(buf, sizeof(buf), "[%.0fm]", m.Distance);
-
+                char buf[32];
+                snprintf(buf, sizeof(buf), "[%.0fm]", m.Distance);
                 ImVec2 tsz = ImGui::CalcTextSize(buf);
-                dl->AddText(ImVec2(screenPos.X - tsz.x * 0.5f, bmin.y - tsz.y - 2.0f), col, buf);
-            }
-
-            if (cfg.MonsterHp && m.MaxHp > 0)
-            {
-                float hpRatio = (float)m.CurrentHp / (float)m.MaxHp;
-                hpRatio = ImClamp(hpRatio, 0.0f, 1.0f);
-                float barW = 3.0f;
-                ImVec2 hmin(bmin.x - barW - 3.0f, bmin.y);
-                ImVec2 hmax(bmin.x - 3.0f, bmax.y);
-                dl->AddRectFilled(hmin, hmax, IM_COL32(20, 20, 20, 180));
-                ImVec2 hpTop(hmin.x, bmax.y - (bmax.y - bmin.y) * hpRatio);
-                dl->AddRectFilled(hpTop, hmax, IM_COL32(230, 50, 50, 230));
+                dl->AddText(ImVec2(screenPos.X - tsz.x * 0.5f, headScreen.Y - tsz.y - 2.0f), col, buf);
             }
         }
     }

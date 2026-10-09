@@ -15,6 +15,10 @@
 #include "Game/Skills/SkillManager.h"
 #include "Game/Login/AutoLoginManager.h"
 #include "Game/Entities/EntityManager.h"
+#include "Game/Quests/QuestManager.h"
+#include "Game/Navigation/NavigationManager.h"
+#include "Game/Navigation/WaypointManager.h"
+#include "Core/StringUtils.h"
 
 #include <stdio.h>
 #include <math.h>
@@ -25,6 +29,7 @@
 #include <stdlib.h>
 
 using namespace Blade;
+using namespace ShaiyaOverlay;
 
 static Settings::sInterface& Ui()
 {
@@ -42,13 +47,15 @@ struct SearchItem { ProtectedText name; int tab; int module; };
 static const SearchItem kSearch[] = {
     { pstra("Auto-Combo"), 0, 0 }, { pstra("Combat range"), 0, 0 }, { pstra("Target switch"), 0, 0 },
     { pstra("Grind Bot"), 0, 1 }, { pstra("Roam radius"), 0, 1 }, { pstra("Anchor position"), 0, 1 },
-    { pstra("Monster ESP"), 1, 0 }, { pstra("Entity health"), 1, 0 }, { pstra("NPC ESP"), 1, 0 },
+    { pstra("Monster ESP"), 1, 0 }, { pstra("Monster distance"), 1, 0 }, { pstra("NPC ESP"), 1, 0 },
     { pstra("Loot ESP"), 1, 1 }, { pstra("Loot snaplines"), 1, 1 }, { pstra("Quest markers"), 1, 2 },
     { pstra("Auto-Loot"), 2, 0 }, { pstra("Loot radius"), 2, 0 }, { pstra("Filter items"), 2, 0 },
     { pstra("Inventory bags"), 2, 1 }, { pstra("Consumables"), 2, 1 },
     { pstra("Auto-Heal"), 3, 0 }, { pstra("HP threshold"), 3, 0 }, { pstra("MP threshold"), 3, 0 }, { pstra("SP threshold"), 3, 0 },
     { pstra("Auto-Buff"), 3, 1 }, { pstra("Buff rotation"), 3, 1 },
-    { pstra("Menu hotkey"), 4, 0 }, { pstra("Panic key"), 4, 0 }, { pstra("UI scale"), 4, 0 }, { pstra("White Label"), 4, 0 },
+    { pstra("Quest List"), 3, 2 }, { pstra("Quest spot"), 3, 2 }, { pstra("Quest NPC"), 3, 2 },
+    { pstra("Navigator"), 3, 3 }, { pstra("Waypoints"), 3, 3 }, { pstra("Gatekeeper"), 3, 3 }, { pstra("Useful NPCs"), 3, 3 },
+    { pstra("Menu hotkey"), 4, 0 }, { pstra("Panic key"), 4, 0 }, { pstra("UI scale"), 4, 0 }, { pstra("Themes"), 4, 1 },
 };
 static const int kSearchCount = IM_ARRAYSIZE(kSearch);
 
@@ -205,6 +212,100 @@ static void RowToggle(Col& c, const char* label, const char* id, bool* v, bool d
         IconButton(did, IC_DOTS, ImVec2(c.x + c.w - control_padding - 52.0f, cy), 13.0f, C.text_mute, 10.0f);
     }
     Toggle(id, ImVec2(c.x + c.w - control_padding, cy), v, 32.0f, 17.0f);
+    PopAlpha();
+}
+
+static void RowTextInput(Col& c, const char* label, const char* id, char* buf, size_t bufSize, const char* placeholder = nullptr, bool disabled = false)
+{
+    float iw = 136.0f, ih = 22.0f;
+    float cy = c.Row(label, disabled, nullptr, iw + 20.0f);
+    const float control_padding = CardControlPadding();
+    ImVec2 imin(c.x + c.w - control_padding - iw, cy - ih * 0.5f);
+    ImVec2 imax(c.x + c.w - control_padding, cy + ih * 0.5f);
+
+    ImGuiID input_id = ImGui::GetCurrentWindow()->GetID(id);
+    static ImGuiID focused_input_id = 0;
+    bool is_focused = (focused_input_id == input_id) && !disabled;
+
+    bool hov = false;
+    if (!disabled && Hitbox(id, imin, imax, &hov))
+    {
+        focused_input_id = input_id;
+        is_focused = true;
+    }
+
+    if (is_focused && !disabled)
+    {
+        if (ImGui::IsMouseClicked(0) && !hov)
+        {
+            focused_input_id = 0;
+            is_focused = false;
+            ShaiyaOverlay::GroundItemManager::SaveConfig();
+        }
+        else
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            for (int n = 0; n < io.InputQueueCharacters.Size; n++)
+            {
+                ImWchar ch = io.InputQueueCharacters[n];
+                if (ch >= 32 && ch < 255)
+                {
+                    size_t len = strlen(buf);
+                    if (len + 1 < bufSize)
+                    {
+                        buf[len] = static_cast<char>(ch);
+                        buf[len + 1] = '\0';
+                        ShaiyaOverlay::GroundItemManager::SaveConfig();
+                    }
+                }
+            }
+            if (ImGui::IsKeyPressed(0x08, true)) // Backspace
+            {
+                size_t len = strlen(buf);
+                if (len > 0)
+                {
+                    buf[len - 1] = '\0';
+                    ShaiyaOverlay::GroundItemManager::SaveConfig();
+                }
+            }
+            if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Enter), false))
+            {
+                if (buf[0] != '\0')
+                {
+                    ShaiyaOverlay::GroundItemManager::AddFilterItem(buf);
+                    buf[0] = '\0';
+                }
+                focused_input_id = 0;
+                is_focused = false;
+            }
+            else if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape), false))
+            {
+                focused_input_id = 0;
+                is_focused = false;
+            }
+        }
+    }
+
+    PushAlpha(disabled ? (c.a * 0.45f) : c.a);
+    RectFilled(c.dl, imin, imax, (hov || is_focused) ? C.pill_hover : C.pill, 6.0f);
+    if (is_focused)
+        RectStroke(c.dl, imin, imax, Accent(0.6f), 6.0f);
+    else
+        RectStroke(c.dl, imin, imax, C.border, 6.0f);
+
+    bool empty = (buf[0] == '\0');
+    const char* txt = empty ? (placeholder ? placeholder : "") : buf;
+    char fit_buf[64];
+    const char* shown = FitEllipsis(F_Small, txt, iw - 16.0f, fit_buf, sizeof(fit_buf));
+    ImVec2 ts = Measure(F_Small, shown);
+    TextAt(c.dl, F_Small, ImVec2(imin.x + 8.0f, cy - ts.y * 0.5f),
+           (empty || disabled) ? C.text_mute : C.text, shown);
+
+    if (is_focused && fmodf(static_cast<float>(ImGui::GetTime()), 1.0f) < 0.5f)
+    {
+        float curx = imin.x + 8.0f + (empty ? 0.0f : ts.x) + 1.0f;
+        c.dl->AddLine(ImVec2(curx, cy - 6.0f), ImVec2(curx, cy + 6.0f), C.text, 1.0f);
+    }
     PopAlpha();
 }
 
@@ -667,18 +768,118 @@ static void DrawLootContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
     if (selected_module == 0) // Auto-Loot
     {
         auto& lootCfg = ShaiyaOverlay::GroundItemManager::GetConfig();
-        L.Section(pstra("Auto-Loot Engine"), 2);
+        const auto& filterList = ShaiyaOverlay::GroundItemManager::GetFilterList();
+
+        static char s_NewFilterItem[64] = "";
+
+        L.Section(pstra("Auto-Loot Configuration"), 5);
+        bool oldEn = lootCfg.Enabled;
         RowToggle(L, pstra("Enable Auto-Loot"), pstra("##df_loot_en"), &lootCfg.Enabled, false);
+        if (lootCfg.Enabled != oldEn) ShaiyaOverlay::GroundItemManager::SaveConfig();
+
+        float oldRad = lootCfg.PickupRadius;
         RowSlider(L, pstra("Pickup Radius"), pstra("##df_loot_radius"), &lootCfg.PickupRadius, 1.0f, 30.0f, pstra("%.1f m"));
+        if (lootCfg.PickupRadius != oldRad) ShaiyaOverlay::GroundItemManager::SaveConfig();
+
+        bool oldMine = lootCfg.OnlyMyDrops;
+        RowToggle(L, pstra("Only My Drops"), pstra("##df_loot_mydrops"), &lootCfg.OnlyMyDrops, false);
+        if (lootCfg.OnlyMyDrops != oldMine) ShaiyaOverlay::GroundItemManager::SaveConfig();
+
+        bool oldWalk = lootCfg.AutoWalkToLoot;
+        RowToggle(L, pstra("Auto-Walk to Loot"), pstra("##df_loot_walk"), &lootCfg.AutoWalkToLoot, false);
+        if (lootCfg.AutoWalkToLoot != oldWalk) ShaiyaOverlay::GroundItemManager::SaveConfig();
+
+        float oldWalkDist = lootCfg.MaxWalkDistance;
+        RowSlider(L, pstra("Max Walk Distance"), pstra("##df_loot_walk_dist"), &lootCfg.MaxWalkDistance, 5.0f, 50.0f, pstra("%.0f m"));
+        if (lootCfg.MaxWalkDistance != oldWalkDist) ShaiyaOverlay::GroundItemManager::SaveConfig();
 
         const auto& groundItems = ShaiyaOverlay::GroundItemManager::GetGroundItems();
         char bufGround[48];
         snprintf(bufGround, sizeof(bufGround), pstra("Detected Drops: %u"), groundItems.GetCount());
 
-        R.Section(pstra("Ground Loot Status"), 3);
-        R.Row(bufGround, false);
-        R.Row(pstra("Fast packet pick: Active"), true);
-        R.Row(pstra("Prioritizes quest objectives & gold"), true);
+        L.y += 10.0f;
+        L.Section(pstra("Loot Status"), 3);
+        L.Row(bufGround, false);
+        L.Row(pstra("Fast packet pick: Active (120ms)"), true);
+        L.Row(lootCfg.Enabled ? pstra("Auto-Loot: Running") : pstra("Auto-Loot: Suspended"), true);
+
+        // Right Column: Filter Whitelist & Controls on the SAME tab
+        bool filterDisabled = lootCfg.LootAllIgnoreFilter;
+        unsigned int fCount = filterList.GetCount();
+        int rCount = 3 + (fCount > 0 ? (int)fCount + 1 : 1);
+        R.Section(pstra("Filter Whitelist (Item Names)"), rCount);
+
+        bool oldIgnore = lootCfg.LootAllIgnoreFilter;
+        RowToggle(R, pstra("Loot All (Ignore Filter)"), pstra("##df_loot_all_ignore"), &lootCfg.LootAllIgnoreFilter, false);
+        if (lootCfg.LootAllIgnoreFilter != oldIgnore) ShaiyaOverlay::GroundItemManager::SaveConfig();
+
+        RowTextInput(R, pstra("Item Name"), pstra("##df_add_filter_name"), s_NewFilterItem, sizeof(s_NewFilterItem), pstra("Type name to filter"), filterDisabled);
+
+        {
+            float cy = R.Row(pstra("Add to List"), filterDisabled, nullptr, 90.0f);
+            float bw = 80.0f, bh = 22.0f;
+            const float cp = CardControlPadding();
+            ImVec2 bmin(R.x + R.w - cp - bw, cy - bh * 0.5f);
+            ImVec2 bmax(R.x + R.w - cp, cy + bh * 0.5f);
+            PushAlpha(filterDisabled ? (R.a * 0.4f) : R.a);
+            if (!filterDisabled && Button(pstra("##btn_add_filter_item"), bmin, bmax, pstra("+ Add"), true))
+            {
+                if (s_NewFilterItem[0] != '\0')
+                {
+                    ShaiyaOverlay::GroundItemManager::AddFilterItem(s_NewFilterItem);
+                    s_NewFilterItem[0] = '\0';
+                }
+            }
+            else if (filterDisabled)
+            {
+                Button(pstra("##btn_add_filter_item"), bmin, bmax, pstra("+ Add"), false);
+            }
+            PopAlpha();
+        }
+
+        if (fCount == 0)
+        {
+            R.Row(filterDisabled ? pstra("Filter disabled (Looting ALL)") : pstra("No items in list (Looting ALL)"), true);
+        }
+        else
+        {
+            const float cp = CardControlPadding();
+            for (unsigned int i = 0; i < fCount; ++i)
+            {
+                char itemLabel[80];
+                snprintf(itemLabel, sizeof(itemLabel), pstra("#%u %s"), i + 1, filterList[i].Name);
+                float rcy = R.Row(itemLabel, filterDisabled, nullptr, 36.0f);
+
+                if (!filterDisabled)
+                {
+                    char btnId[32];
+                    snprintf(btnId, sizeof(btnId), pstra("##del_flt_%u"), i);
+                    PushAlpha(R.a);
+                    if (IconButton(btnId, IC_CLOSE, ImVec2(R.x + R.w - cp - 12.0f, rcy), 12.0f, C.text_mute, 10.0f))
+                    {
+                        ShaiyaOverlay::GroundItemManager::RemoveFilterItem(i);
+                        PopAlpha();
+                        break;
+                    }
+                    PopAlpha();
+                }
+            }
+
+            float ccy = R.Row(pstra("Clear Entire List"), filterDisabled, nullptr, 90.0f);
+            float cbw = 80.0f, cbh = 22.0f;
+            ImVec2 cbmin(R.x + R.w - cp - cbw, ccy - cbh * 0.5f);
+            ImVec2 cbmax(R.x + R.w - cp, ccy + cbh * 0.5f);
+            PushAlpha(filterDisabled ? (R.a * 0.4f) : R.a);
+            if (!filterDisabled && Button(pstra("##btn_clr_all_flt"), cbmin, cbmax, pstra("Clear All"), false))
+            {
+                ShaiyaOverlay::GroundItemManager::ClearFilterList();
+            }
+            else if (filterDisabled)
+            {
+                Button(pstra("##btn_clr_all_flt"), cbmin, cbmax, pstra("Clear All"), false);
+            }
+            PopAlpha();
+        }
     }
     else // Inventory
     {
@@ -734,9 +935,13 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
 
     static float scroll = 0.0f;
     static float content_h = 0.0f;
+    int selected_module = S.module_sel[3];
+
+    static ImVec2 s_npc_box_min(0, 0), s_npc_box_max(0, 0);
+    bool over_npc_box = (selected_module == 3) && ImGui::IsMouseHoveringRect(s_npc_box_min, s_npc_box_max);
 
     ImVec2 vmin(cx0, view_y0), vmax(max.x - 4.0f, view_y1);
-    if (ImGui::IsMouseHoveringRect(vmin, vmax) && ImGui::GetIO().MouseWheel != 0.0f)
+    if (ImGui::IsMouseHoveringRect(vmin, vmax) && !over_npc_box && ImGui::GetIO().MouseWheel != 0.0f)
         scroll -= ImGui::GetIO().MouseWheel * 42.0f;
     scroll = ImClamp(scroll, 0.0f, ImMax(content_h - view_h, 0.0f));
 
@@ -745,8 +950,6 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
 
     Col L; L.dl = dl; L.x = cx0 + CONT_PAD; L.y = base_y; L.w = col_w;
     Col R; R.dl = dl; R.x = cx0 + CONT_PAD + col_w + COL_GAP; R.y = base_y; R.w = col_w;
-
-    int selected_module = S.module_sel[3];
 
     if (selected_module == 0) // Auto-Heal
     {
@@ -776,7 +979,7 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         R.Row(spBuf, !hasSp);
         R.Row(pstra("Native opcode: 0x050A (SendUseItem)"), true);
     }
-    else // Auto-Buff
+    else if (selected_module == 1) // Auto-Buff
     {
         auto& buffCfg = ShaiyaOverlay::BuffManager::GetConfig();
         L.Section(pstra("Auto-Buff Engine"), 3);
@@ -816,6 +1019,539 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
                 }
             }
         }
+    }
+    else if (selected_module == 2) // Quest List
+    {
+        Settings& settings = Settings::Get();
+        const auto& quests = ShaiyaOverlay::QuestManager::GetActiveQuests();
+        const auto& markers = ShaiyaOverlay::QuestManager::GetQuestMarkers();
+        const auto& monsters = ShaiyaOverlay::EntityManager::GetNearbyMonsters();
+        unsigned int qCount = quests.GetCount();
+        bool isNavigating = ShaiyaOverlay::NavigationManager::IsNavigating();
+
+        // Left Top Section: Navigation Status & Control
+        L.Section(pstra("Quest Navigation Control"), 2);
+        if (isNavigating)
+        {
+            char navBuf[80];
+            snprintf(navBuf, sizeof(navBuf), pstra("Heading to: %s (%.0fm)"),
+                     ShaiyaOverlay::NavigationManager::GetTargetName(),
+                     ShaiyaOverlay::NavigationManager::GetRemainingDistance());
+            float rcy = L.Row(navBuf, false, nullptr, 75.0f);
+            float bw = 65.0f, bh = 22.0f;
+            const float cp = CardControlPadding();
+            ImVec2 bmin(L.x + L.w - cp - bw, rcy - bh * 0.5f);
+            ImVec2 bmax(L.x + L.w - cp, rcy + bh * 0.5f);
+            PushAlpha(L.a);
+            if (Button(pstra("##btn_stop_nav"), bmin, bmax, pstra("Stop"), true))
+            {
+                ShaiyaOverlay::NavigationManager::Stop();
+                Blade::PushNotification(pstra("Navigation cancelled."), NT_INFO);
+            }
+            PopAlpha();
+            L.Row(pstra("A* Pathfinding & Collision: Active"), true);
+        }
+        else
+        {
+            char countBuf[64];
+            snprintf(countBuf, sizeof(countBuf), pstra("Active Quests: %u"), qCount);
+            L.Row(countBuf, false);
+            L.Row(pstra("Click below to auto-walk to NPC or Spot"), true);
+        }
+
+        // Right Top Section: Waypoint Indicators
+        R.Section(pstra("Waypoint Overlay"), 2);
+        RowToggle(R, pstra("Draw Quest Waypoints"), pstra("##q_wp_toggle"), &settings.Visuals.QuestWaypoints, false);
+        RowColor(R, pstra("Waypoint Color"), pstra("##q_wp_col"), (ImVec4*)&settings.Visuals.QuestColor);
+
+        L.y += 10.0f;
+        R.y += 10.0f;
+
+        if (qCount == 0)
+        {
+            L.Section(pstra("Active Quests"), 2);
+            L.Row(pstra("No active quests found."), true);
+            L.Row(pstra("Accept quests from NPCs to track here."), true);
+
+            R.Section(pstra("Gameplay Tip"), 2);
+            R.Row(pstra("Yellow waypoints indicate turn-in NPCs"), true);
+            R.Row(pstra("Monster spawn spots are recorded automatically"), true);
+        }
+        else
+        {
+            for (unsigned int q = 0; q < qCount; ++q)
+            {
+                const auto& Q = quests[q];
+                Col& c = (q % 2 == 0) ? L : R;
+
+                char secTitle[96];
+                snprintf(secTitle, sizeof(secTitle), pstra("[Q.%u] %s"), Q.QuestId, Q.Title[0] ? Q.Title : pstra("Quest"));
+
+                // Objectives text
+                char objText[160] = { 0 };
+                if (Q.ObjectiveCount == 0 && Q.ItemObjectiveCount == 0)
+                {
+                    snprintf(objText, sizeof(objText), "%s", pstra("Talk to NPC"));
+                }
+                else
+                {
+                    for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
+                    {
+                        char temp[64];
+                        snprintf(temp, sizeof(temp), "%s: %u/%u%s",
+                            Q.Objectives[o].TargetMobName[0] ? Q.Objectives[o].TargetMobName : pstra("Mob"),
+                            Q.Objectives[o].CurrentCount,
+                            Q.Objectives[o].CountNeeded,
+                            (o + 1 < Q.ObjectiveCount || Q.ItemObjectiveCount > 0) ? ", " : "");
+                        strcat_s(objText, sizeof(objText), temp);
+                    }
+                    for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
+                    {
+                        char temp[64];
+                        snprintf(temp, sizeof(temp), "%s: %u/%u%s",
+                            Q.ItemObjectives[o].ItemName[0] ? Q.ItemObjectives[o].ItemName : pstra("Item"),
+                            Q.ItemObjectives[o].CurrentCount,
+                            Q.ItemObjectives[o].CountNeeded,
+                            (o + 1 < Q.ItemObjectiveCount) ? ", " : "");
+                        strcat_s(objText, sizeof(objText), temp);
+                    }
+                }
+
+                // Turn-in NPC info
+                char destText[96];
+                if (Q.HasDestination && Q.DestinationName[0])
+                    snprintf(destText, sizeof(destText), pstra("NPC: %s (%.0fm)"), Q.DestinationName, Q.Distance);
+                else if (Q.DestinationName[0])
+                    snprintf(destText, sizeof(destText), pstra("NPC: %s"), Q.DestinationName);
+                else
+                    snprintf(destText, sizeof(destText), pstra("NPC: Marked on map"));
+
+                // Resolve NPC Pos
+                bool hasNpcPos = false;
+                Vector3 npcPos;
+                char npcName[64] = "NPC";
+                if (Q.HasDestination)
+                {
+                    npcPos = Q.DestinationPos;
+                    StringUtils::Copy(npcName, Q.DestinationName, sizeof(npcName));
+                    hasNpcPos = true;
+                }
+                for (unsigned int k = 0; k < markers.GetCount(); ++k)
+                {
+                    const auto& M = markers[k];
+                    if (M.IsTurnIn && (M.QuestId == Q.QuestId || (hasNpcPos && M.Position.DistanceTo(npcPos) < 5.0f)))
+                    {
+                        npcPos = M.Position;
+                        StringUtils::Copy(npcName, M.NpcName, sizeof(npcName));
+                        hasNpcPos = true;
+                        break;
+                    }
+                }
+
+                // Resolve Spot Pos
+                unsigned short targetMobId = 0;
+                const char* mobLabel = nullptr;
+                for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
+                {
+                    if (!Q.Objectives[o].Completed && Q.Objectives[o].TargetMobId > 0)
+                    {
+                        targetMobId = Q.Objectives[o].TargetMobId;
+                        mobLabel = Q.Objectives[o].TargetMobName;
+                        break;
+                    }
+                }
+                if (targetMobId == 0)
+                {
+                    for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
+                    {
+                        if (!Q.ItemObjectives[o].Completed && Q.ItemObjectives[o].DroppedByMobId > 0)
+                        {
+                            targetMobId = Q.ItemObjectives[o].DroppedByMobId;
+                            mobLabel = Q.ItemObjectives[o].DroppedByMobName;
+                            break;
+                        }
+                    }
+                }
+
+                bool hasSpotPos = false;
+                Vector3 spotPos;
+                char spotName[64] = "Spot";
+
+                // Check 1: live nearby mob
+                float bestDist = 99999.0f;
+                for (unsigned int m = 0; m < monsters.GetCount(); ++m)
+                {
+                    const auto& mob = monsters[m];
+                    bool match = (targetMobId > 0 && mob.MobId == targetMobId);
+                    if (!match && mobLabel && mobLabel[0] != '\0')
+                    {
+                        match = StringUtils::ContainsCaseInsensitive(mob.Name, mobLabel);
+                    }
+                    if (mob.Alive && match && mob.Distance < bestDist)
+                    {
+                        bestDist = mob.Distance;
+                        spotPos = mob.Position;
+                        StringUtils::Copy(spotName, mob.Name, sizeof(spotName));
+                        hasSpotPos = true;
+                    }
+                }
+
+                // Check 2: cached spawn position from quest_mob_cache
+                if (!hasSpotPos && targetMobId > 0)
+                {
+                    Vector3 cachedPos;
+                    char cachedName[64] = { 0 };
+                    if (ShaiyaOverlay::QuestManager::GetSavedMobPosition(Q.QuestId, targetMobId, cachedPos, cachedName, sizeof(cachedName)))
+                    {
+                        spotPos = cachedPos;
+                        StringUtils::Copy(spotName, cachedName[0] ? cachedName : (mobLabel ? mobLabel : "Quest Spot"), sizeof(spotName));
+                        hasSpotPos = true;
+                    }
+                }
+
+                if (q >= 2)
+                    c.y += 8.0f;
+
+                c.Section(secTitle, 3);
+                c.Row(objText, false);
+                c.Row(destText, true);
+
+                float bcy = c.Row(nullptr);
+                const float cp = CardControlPadding();
+                float btn_gap = 6.0f;
+                float btn_w = (c.w - cp * 2.0f - btn_gap) * 0.5f;
+
+                ImVec2 b1_min(c.x + cp, bcy - 12.0f);
+                ImVec2 b1_max(b1_min.x + btn_w, bcy + 12.0f);
+                ImVec2 b2_min(b1_max.x + btn_gap, bcy - 12.0f);
+                ImVec2 b2_max(b2_min.x + btn_w, bcy + 12.0f);
+
+                char b1_id[32]; snprintf(b1_id, sizeof(b1_id), pstra("##q_npc_%u"), Q.QuestId);
+                char b2_id[32]; snprintf(b2_id, sizeof(b2_id), pstra("##q_spot_%u"), Q.QuestId);
+
+                PushAlpha(c.a);
+                if (Button(b1_id, b1_min, b1_max, pstra("Go to NPC"), hasNpcPos))
+                {
+                    if (hasNpcPos)
+                    {
+                        ShaiyaOverlay::NavigationManager::WalkTo(npcPos, npcName, 2.5f);
+                        Blade::PushNotification(pstra("Walking to NPC..."), NT_INFO);
+                    }
+                    else
+                    {
+                        Blade::PushNotification(pstra("NPC position not found."), NT_WARNING);
+                    }
+                }
+
+                if (Button(b2_id, b2_min, b2_max, pstra("Go to Spot"), hasSpotPos))
+                {
+                    if (hasSpotPos)
+                    {
+                        ShaiyaOverlay::NavigationManager::WalkTo(spotPos, spotName, 2.5f);
+                        Blade::PushNotification(pstra("Walking to spot..."), NT_INFO);
+                    }
+                    else
+                    {
+                        Blade::PushNotification(pstra("Spot not cached yet. Approach once to save."), NT_WARNING);
+                    }
+                }
+                PopAlpha();
+            }
+        }
+    }
+    else // Navigator (selected_module == 3)
+    {
+        bool isNavigating = ShaiyaOverlay::NavigationManager::IsNavigating();
+        const auto& waypoints = ShaiyaOverlay::WaypointManager::GetCustomWaypoints();
+        const auto& npcs = ShaiyaOverlay::WaypointManager::GetUsefulNpcs();
+        const auto& player = ShaiyaOverlay::EntityManager::GetLocalPlayer();
+
+        // Single-column full width layout
+        Col col;
+        col.dl = dl;
+        col.x = cx0 + CONT_PAD;
+        col.y = base_y;
+        col.w = cw - CONT_PAD * 2.0f;
+        const float cp = CardControlPadding();
+
+        // Top Card: Navigation Status & Control
+        col.Section(pstra("Navigation Status & Control"), 2);
+        if (isNavigating)
+        {
+            char navBuf[96];
+            snprintf(navBuf, sizeof(navBuf), pstra("Heading to: %s (%.0fm)"),
+                     ShaiyaOverlay::NavigationManager::GetTargetName(),
+                     ShaiyaOverlay::NavigationManager::GetRemainingDistance());
+            float rcy = col.Row(navBuf, false, nullptr, 90.0f);
+            float bw = 75.0f, bh = 24.0f;
+            ImVec2 bmin(col.x + col.w - cp - bw, rcy - bh * 0.5f);
+            ImVec2 bmax(col.x + col.w - cp, rcy + bh * 0.5f);
+            PushAlpha(col.a);
+            if (Button(pstra("##btn_stop_nav_mod"), bmin, bmax, pstra("Stop"), true))
+            {
+                ShaiyaOverlay::NavigationManager::Stop();
+                Blade::PushNotification(pstra("Navigation stopped."), NT_INFO);
+            }
+            PopAlpha();
+            col.Row(pstra("A* Pathfinding & Clearance: Active"), true);
+        }
+        else
+        {
+            col.Row(pstra("Status: Idle (No active destination)"), false);
+            col.Row(pstra("Select a Map NPC or Custom Waypoint below to start pathfinding"), true);
+        }
+
+        col.y += 12.0f;
+
+        // Block 1 (Top Block): Useful Map NPCs with Filter & Inner Scroll
+        static char s_npc_filter[48] = { 0 };
+        static float s_npc_scroll = 0.0f;
+
+        // Filter matched NPCs
+        struct FilteredNpcRef {
+            U32 index;
+            const ShaiyaOverlay::UsefulNpc* npc;
+        };
+        std::vector<FilteredNpcRef> matchedNpcs;
+        matchedNpcs.reserve(npcs.GetCount());
+
+        for (U32 i = 0; i < npcs.GetCount(); ++i)
+        {
+            const auto& npc = npcs[i];
+            if (s_npc_filter[0] != '\0')
+            {
+                if (!StringUtils::ContainsCaseInsensitive(npc.Name, s_npc_filter) &&
+                    !StringUtils::ContainsCaseInsensitive(npc.Role, s_npc_filter))
+                    continue;
+            }
+            matchedNpcs.push_back({ i, &npc });
+        }
+
+        col.Section(pstra("Useful Map NPCs (Gatekeepers, Merchants & Quests)"), 2);
+        RowTextInput(col, pstra("Filter NPCs"), pstra("##npc_flt_input"), s_npc_filter, sizeof(s_npc_filter), pstra("Type name or role (e.g. gate, smith, pot)..."));
+
+        char npcSummary[96];
+        snprintf(npcSummary, sizeof(npcSummary), pstra("Detected on map: %u NPCs (Matching: %zu)"), npcs.GetCount(), matchedNpcs.size());
+        float rcy_ref = col.Row(npcSummary, false, nullptr, 100.0f);
+        float brw = 85.0f, brh = 24.0f;
+        ImVec2 bref_min(col.x + col.w - cp - brw, rcy_ref - brh * 0.5f);
+        ImVec2 bref_max(col.x + col.w - cp, rcy_ref + brh * 0.5f);
+        PushAlpha(col.a);
+        if (Button(pstra("##btn_refresh_npcs"), bref_min, bref_max, pstra("Refresh"), true))
+        {
+            ShaiyaOverlay::WaypointManager::RefreshUsefulNpcs();
+            Blade::PushNotification(pstra("NPC list refreshed."), NT_INFO);
+        }
+        PopAlpha();
+
+        // Inner scrolling container for NPCs (keeps parent view compact)
+        const float inner_npc_h = 220.0f;
+        const float npc_item_h = 36.0f;
+        float npc_content_h = matchedNpcs.empty() ? 40.0f : (matchedNpcs.size() * npc_item_h);
+
+        ImVec2 gmin(col.x, col.y + 6.0f);
+        ImVec2 gmax(col.x + col.w, gmin.y + inner_npc_h);
+        s_npc_box_min = gmin;
+        s_npc_box_max = gmax;
+
+        // Inner scrollbar drag handling
+        static bool s_inner_dragging = false;
+        if (npc_content_h > inner_npc_h)
+        {
+            float tx = gmax.x - 6.0f;
+            float ratio = inner_npc_h / npc_content_h;
+            float bh = ImMax(inner_npc_h * ratio, 24.0f);
+
+            ImVec2 track_min(tx - 6.0f, gmin.y);
+            ImVec2 track_max(gmax.x, gmax.y);
+
+            if (ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringRect(track_min, track_max))
+                s_inner_dragging = true;
+            if (!ImGui::IsMouseDown(0))
+                s_inner_dragging = false;
+
+            if (s_inner_dragging)
+            {
+                float my = ImGui::GetIO().MousePos.y - gmin.y - bh * 0.5f;
+                float norm = ImClamp(my / ImMax(inner_npc_h - bh, 1.0f), 0.0f, 1.0f);
+                s_npc_scroll = norm * (npc_content_h - inner_npc_h);
+            }
+        }
+        else
+        {
+            s_inner_dragging = false;
+        }
+
+        // Handle inner mouse wheel scrolling when hovering NPC box or dragging scrollbar
+        if ((over_npc_box || s_inner_dragging) && ImGui::GetIO().MouseWheel != 0.0f)
+        {
+            s_npc_scroll -= ImGui::GetIO().MouseWheel * 36.0f;
+        }
+        s_npc_scroll = ImClamp(s_npc_scroll, 0.0f, ImMax(npc_content_h - inner_npc_h, 0.0f));
+
+        // Draw inner container background & border
+        RectFilled(dl, gmin, gmax, Fade(C.row, col.a * 0.65f), 8.0f);
+        RectStroke(dl, gmin, gmax, Fade(C.divider, col.a), 8.0f);
+
+        dl->PushClipRect(gmin, gmax, true);
+        if (matchedNpcs.empty())
+        {
+            const char* emptyMsg = (npcs.GetCount() == 0)
+                ? pstra("No static or live NPCs detected on this map.")
+                : pstra("No NPCs matching current filter criteria.");
+            ImVec2 ems = Measure(F_Body, emptyMsg);
+            TextAt(dl, F_Body, ImVec2(gmin.x + (col.w - ems.x) * 0.5f, gmin.y + (inner_npc_h - ems.y) * 0.5f), Fade(C.text_mute, col.a), emptyMsg);
+        }
+        else
+        {
+            float cur_y = gmin.y + 2.0f - s_npc_scroll;
+            for (size_t m = 0; m < matchedNpcs.size(); ++m)
+            {
+                float row_y0 = cur_y + m * npc_item_h;
+                float row_y1 = row_y0 + npc_item_h;
+
+                if (row_y1 >= gmin.y && row_y0 <= gmax.y)
+                {
+                    ImVec2 rmin(gmin.x + 4.0f, row_y0);
+                    ImVec2 rmax(gmax.x - (npc_content_h > inner_npc_h ? 14.0f : 4.0f), row_y1);
+
+                    bool hov = false;
+                    char hitId[32]; snprintf(hitId, sizeof(hitId), pstra("##npc_row_hit_%u"), matchedNpcs[m].index);
+                    Hitbox(hitId, rmin, rmax, &hov);
+                    if (hov)
+                        RectFilled(dl, rmin, rmax, Fade(C.row_hover, col.a), 6.0f);
+
+                    if (m > 0)
+                        dl->AddLine(ImVec2(rmin.x + 8.0f, row_y0), ImVec2(rmax.x - 8.0f, row_y0), Fade(C.divider, col.a * 0.5f), 1.0f);
+
+                    const auto& npc = *matchedNpcs[m].npc;
+                    char npcLabel[128];
+                    snprintf(npcLabel, sizeof(npcLabel), pstra("[%s] %s  --  %.0fm (X: %.0f, Z: %.0f)"),
+                             npc.Role, npc.Name, npc.Distance, npc.Position.X, npc.Position.Z);
+
+                    float text_w = rmax.x - rmin.x - 105.0f;
+                    char bufFit[128];
+                    const char* shown = FitEllipsis(F_Body, npcLabel, text_w, bufFit, sizeof(bufFit));
+                    ImVec2 ts = Measure(F_Body, shown);
+                    TextAt(dl, F_Body, ImVec2(rmin.x + 10.0f, (row_y0 + row_y1) * 0.5f - ts.y * 0.5f), Fade(C.text, col.a), shown);
+
+                    // Button Go to NPC
+                    float bw = 85.0f, bh = 22.0f;
+                    ImVec2 bmin(rmax.x - bw - 6.0f, (row_y0 + row_y1) * 0.5f - bh * 0.5f);
+                    ImVec2 bmax(rmax.x - 6.0f, (row_y0 + row_y1) * 0.5f + bh * 0.5f);
+                    char bid[32]; snprintf(bid, sizeof(bid), pstra("##go_npc_%u"), matchedNpcs[m].index);
+                    PushAlpha(col.a);
+                    if (Button(bid, bmin, bmax, pstra("Go to NPC"), true))
+                    {
+                        ShaiyaOverlay::NavigationManager::WalkTo(npc.Position, npc.Name, 2.5f);
+                        Blade::PushNotification(pstra("Walking to NPC..."), NT_INFO);
+                    }
+                    PopAlpha();
+                }
+            }
+        }
+        dl->PopClipRect();
+
+        // Inner scrollbar
+        if (npc_content_h > inner_npc_h)
+        {
+            float tx = gmax.x - 6.0f;
+            float ratio = inner_npc_h / npc_content_h;
+            float bh = ImMax(inner_npc_h * ratio, 24.0f);
+            float by = gmin.y + (inner_npc_h - bh) * (s_npc_scroll / ImMax(npc_content_h - inner_npc_h, 1.0f));
+            RectFilled(dl, ImVec2(tx - 1.5f, gmin.y + 4.0f), ImVec2(tx + 1.5f, gmax.y - 4.0f), Fade(C.separator, col.a), 1.5f);
+            RectFilled(dl, ImVec2(tx - 1.5f, by), ImVec2(tx + 1.5f, by + bh), Fade(s_inner_dragging ? C.accent : C.scroll, col.a), 1.5f);
+        }
+
+        col.y = gmax.y + 14.0f;
+
+        // Block 2 (Bottom Block): User-Defined Waypoints
+        static char s_new_wp_name[48] = { 0 };
+        col.Section(pstra("Record Custom Waypoint"), 2);
+        RowTextInput(col, pstra("Waypoint Name"), pstra("##new_wp_input"), s_new_wp_name, sizeof(s_new_wp_name), pstra("e.g. Boss Spawn, Farm Spot, Secret Cave..."));
+
+        float rcy_save = col.Row(nullptr);
+        ImVec2 bsave_min(col.x + cp, rcy_save - 12.0f);
+        ImVec2 bsave_max(col.x + col.w - cp, rcy_save + 12.0f);
+        PushAlpha(col.a);
+        if (Button(pstra("##btn_save_current_pos"), bsave_min, bsave_max, pstra("Save Current Position as Waypoint"), player.Valid))
+        {
+            if (player.Valid)
+            {
+                char finalName[48];
+                if (s_new_wp_name[0] != '\0')
+                    StringUtils::Copy(finalName, s_new_wp_name, sizeof(finalName));
+                else
+                    snprintf(finalName, sizeof(finalName), pstra("Waypoint #%u"), waypoints.GetCount() + 1);
+
+                if (ShaiyaOverlay::WaypointManager::AddCustomWaypoint(finalName, player.Position))
+                {
+                    s_new_wp_name[0] = '\0';
+                    Blade::PushNotification(pstra("Waypoint saved successfully!"), NT_SUCCESS);
+                }
+                else
+                {
+                    Blade::PushNotification(pstra("Maximum waypoint limit reached (32)."), NT_WARNING);
+                }
+            }
+            else
+            {
+                Blade::PushNotification(pstra("Player position not valid."), NT_ERROR);
+            }
+        }
+        PopAlpha();
+
+        col.y += 10.0f;
+
+        // Saved Custom Waypoints List
+        U32 wpCount = waypoints.GetCount();
+        col.Section(pstra("Saved Custom Waypoints"), wpCount > 0 ? wpCount : 1);
+        if (wpCount == 0)
+        {
+            col.Row(pstra("No custom waypoints defined yet. Save your current coordinates above."), true);
+        }
+        else
+        {
+            for (U32 w = 0; w < wpCount; ++w)
+            {
+                const auto& wp = waypoints[w];
+                char wpLabel[128];
+                snprintf(wpLabel, sizeof(wpLabel), pstra("[WP] %s  --  %.0fm (X: %.1f, Y: %.1f, Z: %.1f)"),
+                         wp.Name, wp.Distance, wp.Position.X, wp.Position.Y, wp.Position.Z);
+
+                float cy_wp = col.Row(wpLabel, false, nullptr, 125.0f);
+                float btn_gap = 6.0f;
+                float del_w = 28.0f;
+                float go_w = 70.0f;
+                float bh = 24.0f;
+
+                ImVec2 bgo_min(col.x + col.w - cp - del_w - btn_gap - go_w, cy_wp - bh * 0.5f);
+                ImVec2 bgo_max(bgo_min.x + go_w, cy_wp + bh * 0.5f);
+                ImVec2 bdel_min(bgo_max.x + btn_gap, cy_wp - bh * 0.5f);
+                ImVec2 bdel_max(bdel_min.x + del_w, cy_wp + bh * 0.5f);
+
+                char bgo_id[32]; snprintf(bgo_id, sizeof(bgo_id), pstra("##go_wp_%u"), w);
+                char bdel_id[32]; snprintf(bdel_id, sizeof(bdel_id), pstra("##del_wp_%u"), w);
+
+                PushAlpha(col.a);
+                if (Button(bgo_id, bgo_min, bgo_max, pstra("Go"), true))
+                {
+                    ShaiyaOverlay::NavigationManager::WalkTo(wp.Position, wp.Name, 2.0f);
+                    Blade::PushNotification(pstra("Walking to waypoint..."), NT_INFO);
+                }
+                if (Button(bdel_id, bdel_min, bdel_max, pstra("X"), true))
+                {
+                    ShaiyaOverlay::WaypointManager::RemoveCustomWaypoint(w);
+                    Blade::PushNotification(pstra("Waypoint deleted."), NT_INFO);
+                    PopAlpha();
+                    break;
+                }
+                PopAlpha();
+            }
+        }
+
+        L.y = col.y;
+        R.y = col.y;
     }
 
     content_h = ImMax(L.y, R.y) - base_y;
@@ -885,20 +1621,18 @@ static void DrawSettingsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         RowToggle(R, pstra("Drop shadows"), pstra("##df_shadow"), &settings.Interface.Shadows, false);
         RowToggle(R, pstra("Wallpaper background"), pstra("##df_wallpaper"), &settings.Interface.Wallpaper, false);
     }
-    else // White Label & Automation
+    else // Themes & Customization
     {
-        L.Section(pstra("White Label Status"), 2);
-        L.Row(IsWhiteLabel() ? pstra("White Label: ACTIVE") : pstra("White Label: STANDARD"), false);
-        char brandBuf[64];
-        snprintf(brandBuf, sizeof(brandBuf), pstra("Brand: %s"), WhiteLabelName());
-        L.Row(brandBuf, true);
-
-        L.y += 10.0f;
         L.Section(pstra("Theme Colors"), 4);
         RowColor(L, pstra("Accent Color"), pstra("##th_accent_col"), (ImVec4*)&settings.Interface.AccentColor.Value);
         RowColor(L, pstra("Secondary Color"), pstra("##th_grad_col"), (ImVec4*)&settings.Interface.GradientEnd.Value);
         RowColor(L, pstra("Background Panel"), pstra("##th_panel_col"), (ImVec4*)&settings.Interface.PanelColor.Value);
         RowColor(L, pstra("Text Color"), pstra("##th_text_col"), (ImVec4*)&settings.Interface.TextColor.Value);
+
+        L.y += 10.0f;
+        L.Section(pstra("Color Options"), 2);
+        RowToggle(L, pstra("Gradient Effects"), pstra("##th_grad_fx"), &settings.Interface.GradientText, false);
+        RowToggle(L, pstra("Custom Particles"), pstra("##th_particles_fx"), &settings.Interface.Particles, false);
 
 #ifdef TEST_MODE
         R.Section(pstra("Auto-Login & Account"), 4);
