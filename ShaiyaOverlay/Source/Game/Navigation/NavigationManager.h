@@ -43,7 +43,7 @@ namespace ShaiyaOverlay
         static U32 LastPacketTick;
 
         // Pathfinding Waypoints
-        static Vector3 Waypoints[64];
+        static Vector3 Waypoints[128];
         static U32 WaypointCount;
         static U32 CurrentWaypointIndex;
         static Vector3 PathStartPos;
@@ -65,7 +65,7 @@ namespace ShaiyaOverlay
 
         static Vector3 RequestStart;
         static Vector3 RequestGoal;
-        static Vector3 StagedWaypoints[64];
+        static Vector3 StagedWaypoints[128];
         static U32 StagedWaypointCount;
 
         static HANDLE hWorkerThread;

@@ -1035,8 +1035,8 @@ namespace ShaiyaOverlay
                     start = player.Position;
                 }
 
-                Vector3 waypoints[64];
-                U32 wpCount = NavigationManager::BuildPath(start, goal, waypoints, 64);
+                Vector3 waypoints[128];
+                U32 wpCount = NavigationManager::BuildPath(start, goal, waypoints, 128);
 
                 int written = sprintf_s(pResponse, nMaxLen,
                     "{\"status\":\"ok\",\"waypoint_count\":%u,\"start\":[%.2f,%.2f,%.2f],\"goal\":[%.2f,%.2f,%.2f],\"waypoints\":[",
