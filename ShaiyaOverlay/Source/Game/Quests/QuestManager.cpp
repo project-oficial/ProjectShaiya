@@ -5,6 +5,7 @@
 #include "Game/Entities/EntityManager.h"
 #include "Game/Items/GroundItemManager.h"
 #include "Game/Navigation/NavigationManager.h"
+#include "Game/Navigation/WaypointManager.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -321,6 +322,71 @@ namespace ShaiyaOverlay
         return false;
     }
 
+    bool QuestManager::FindQuestStartNpc(U16 QuestId, U8& OutType, U16& OutId, Vector3& OutPos, char* OutName, U32 MaxLen)
+    {
+        OutType = 0;
+        OutId = 0;
+        if (OutName && MaxLen > 0) OutName[0] = '\0';
+        if (!Offsets.NpcFile || QuestId == 0)
+            return false;
+
+        // 1. Check active markers for matching quest start marker
+        for (U32 i = 0; i < Markers.GetCount(); ++i)
+        {
+            if (Markers[i].QuestId == QuestId && !Markers[i].IsTurnIn)
+            {
+                OutPos = Markers[i].Position;
+                if (OutName && MaxLen > 0)
+                    StringUtils::Copy(OutName, Markers[i].NpcName, MaxLen);
+                return true;
+            }
+        }
+
+        // 2. Scan NpcFile categories (NPC Types 3..13) for quest offer list
+        for (U32 cat = 0; cat < 11; ++cat)
+        {
+            U8 npcType = static_cast<U8>(cat + 3);
+            U32 totalNpcs = 0;
+            U64 npcsArrayPtr = 0;
+
+            Memory::ReadSafe(Offsets.NpcFile + 0x28 + cat * 4, &totalNpcs);
+            Memory::ReadSafe(Offsets.NpcFile + 0x60 + cat * 8, &npcsArrayPtr);
+
+            if (!npcsArrayPtr || totalNpcs == 0)
+                continue;
+
+            for (U32 n = 1; n <= totalNpcs; ++n)
+            {
+                U64 rec = npcsArrayPtr + static_cast<U64>(n - 1) * 448;
+                U32 qCount = 0;
+                Memory::ReadSafe(rec + 40, &qCount);
+                if (qCount == 0 || qCount > 30)
+                    continue;
+
+                U16 qIds[30] = { 0 };
+                Memory::ReadBytesSafe(rec + 44, reinterpret_cast<char*>(qIds), qCount * sizeof(U16));
+
+                for (U32 q = 0; q < qCount; ++q)
+                {
+                    if (qIds[q] == QuestId)
+                    {
+                        OutType = npcType;
+                        OutId = static_cast<U16>(n);
+                        if (FindRadarNpcPosition(OutType, OutId, OutPos))
+                        {
+                            if (OutName && MaxLen > 0)
+                                WaypointManager::ResolveNpcName(OutType, OutId, OutName, MaxLen);
+                            return true;
+                        }
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
     bool QuestManager::FindNpcPosition(U32 NpcId, Vector3& OutPos)
     {
         if (!Offsets.NpcFile || NpcId == 0)
@@ -401,6 +467,10 @@ namespace ShaiyaOverlay
             ActiveQuest Quest;
             Quest.QuestId = 0;
             Quest.Step = 0;
+            Quest.StartNpcType = 0;
+            Quest.StartNpcId = 0;
+            Quest.HasStartNpc = false;
+            Quest.StartNpcName[0] = '\0';
             Quest.EndNpcType = 0;
             Quest.EndNpcId = 0;
             Quest.HasDestination = false;
@@ -566,6 +636,10 @@ namespace ShaiyaOverlay
                 Memory::ReadSafe(QuestTxtRec + Offsets.QuestTextEndNpcId, &Quest.EndNpcId);
             }
 
+            // Resolve Start NPC (Quest Giver)
+            Quest.HasStartNpc = FindQuestStartNpc(Quest.QuestId, Quest.StartNpcType, Quest.StartNpcId, Quest.StartNpcPos, Quest.StartNpcName, sizeof(Quest.StartNpcName));
+
+            // Resolve End NPC / Solution Destination
             if (Quest.EndNpcType > 0 || Quest.EndNpcId > 0)
             {
                 Quest.HasDestination = FindRadarNpcPosition(Quest.EndNpcType, Quest.EndNpcId, Quest.DestinationPos);
@@ -573,7 +647,9 @@ namespace ShaiyaOverlay
                 {
                     if (Player.Valid)
                         Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
-                    StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC (%u-%u)", Quest.EndNpcType, Quest.EndNpcId);
+                    WaypointManager::ResolveNpcName(Quest.EndNpcType, Quest.EndNpcId, Quest.DestinationName, sizeof(Quest.DestinationName));
+                    if (Quest.DestinationName[0] == '\0')
+                        StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC (%u-%u)", Quest.EndNpcType, Quest.EndNpcId);
                 }
                 else
                 {
@@ -583,7 +659,9 @@ namespace ShaiyaOverlay
                         Quest.HasDestination = true;
                         if (Player.Valid)
                             Quest.Distance = Quest.DestinationPos.DistanceTo(Player.Position);
-                        StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC #%u", Quest.EndNpcId);
+                        WaypointManager::ResolveNpcName(Quest.EndNpcType, Quest.EndNpcId, Quest.DestinationName, sizeof(Quest.DestinationName));
+                        if (Quest.DestinationName[0] == '\0')
+                            StringUtils::Format(Quest.DestinationName, sizeof(Quest.DestinationName), "NPC #%u", Quest.EndNpcId);
                     }
                     else
                     {
@@ -596,6 +674,14 @@ namespace ShaiyaOverlay
             {
                 Quest.HasDestination = false;
                 StringUtils::Copy(Quest.DestinationName, "-", sizeof(Quest.DestinationName));
+            }
+
+            // If Start NPC was not found in database, fallback to Destination NPC if available
+            if (!Quest.HasStartNpc && Quest.HasDestination)
+            {
+                Quest.StartNpcPos = Quest.DestinationPos;
+                StringUtils::Copy(Quest.StartNpcName, Quest.DestinationName, sizeof(Quest.StartNpcName));
+                Quest.HasStartNpc = true;
             }
 
             Quests.Add(Quest);

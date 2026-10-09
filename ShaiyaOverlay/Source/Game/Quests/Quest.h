@@ -29,6 +29,11 @@ namespace ShaiyaOverlay
     {
         U16 QuestId;
         U8 Step;
+        U8 StartNpcType;
+        U16 StartNpcId;
+        Vector3 StartNpcPos;
+        bool HasStartNpc;
+        char StartNpcName[64];
         U8 EndNpcType;
         U16 EndNpcId;
         Vector3 DestinationPos;

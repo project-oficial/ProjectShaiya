@@ -26,6 +26,7 @@ namespace ShaiyaOverlay
 
         static bool FindNpcPosition(U32 NpcId, Vector3& OutPos);
         static bool FindRadarNpcPosition(U8 NpcType, U16 NpcId, Vector3& OutPos);
+        static bool FindQuestStartNpc(U16 QuestId, U8& OutType, U16& OutId, Vector3& OutPos, char* OutName, U32 MaxLen);
         static U32 CountInventoryItem(U8 ItemType, U8 ItemTypeId);
         static bool ExtractTagFromDescription(const char* Desc, char* OutTag, U32 MaxLen);
         static U32 ExtractAllTagsFromDescription(const char* Desc, char OutTags[4][64]);

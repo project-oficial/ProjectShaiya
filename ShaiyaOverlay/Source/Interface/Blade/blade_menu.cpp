@@ -1191,25 +1191,35 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
 
                     const auto& Q = *matchedQuests[m].quest;
 
-                    // Resolve NPC Pos
-                    bool hasNpcPos = false;
-                    Vector3 npcPos;
-                    char npcName[64] = "NPC";
-                    if (Q.HasDestination)
-                    {
-                        npcPos = Q.DestinationPos;
-                        StringUtils::Copy(npcName, Q.DestinationName, sizeof(npcName));
-                        hasNpcPos = true;
-                    }
+                    // Resolve Start NPC Pos (Quest Giver)
+                    bool hasStartNpc = Q.HasStartNpc;
+                    Vector3 startNpcPos = Q.StartNpcPos;
+                    char startNpcName[64] = "Quest NPC";
+                    StringUtils::Copy(startNpcName, Q.StartNpcName[0] ? Q.StartNpcName : "Quest NPC", sizeof(startNpcName));
+
+                    // Resolve Solution Destination Pos (Turn-in / Goal)
+                    bool hasSolution = Q.HasDestination;
+                    Vector3 solPos = Q.DestinationPos;
+                    char solName[64] = "Quest Solution";
+                    StringUtils::Copy(solName, Q.DestinationName[0] ? Q.DestinationName : "Quest Solution", sizeof(solName));
+
                     for (unsigned int k = 0; k < markers.GetCount(); ++k)
                     {
                         const auto& M = markers[k];
-                        if (M.IsTurnIn && (M.QuestId == Q.QuestId || (hasNpcPos && M.Position.DistanceTo(npcPos) < 5.0f)))
+                        if (M.QuestId == Q.QuestId)
                         {
-                            npcPos = M.Position;
-                            StringUtils::Copy(npcName, M.NpcName, sizeof(npcName));
-                            hasNpcPos = true;
-                            break;
+                            if (M.IsTurnIn || (hasSolution && M.Position.DistanceTo(solPos) < 5.0f))
+                            {
+                                solPos = M.Position;
+                                StringUtils::Copy(solName, M.NpcName, sizeof(solName));
+                                hasSolution = true;
+                            }
+                            else if (!M.IsTurnIn)
+                            {
+                                startNpcPos = M.Position;
+                                StringUtils::Copy(startNpcName, M.NpcName, sizeof(startNpcName));
+                                hasStartNpc = true;
+                            }
                         }
                     }
 
@@ -1309,22 +1319,30 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
                     }
 
                     char destText[96];
-                    if (Q.HasDestination && Q.DestinationName[0])
-                        snprintf(destText, sizeof(destText), pstra("Turn-in: %s (%.0fm)"), Q.DestinationName, Q.Distance);
-                    else if (Q.DestinationName[0])
-                        snprintf(destText, sizeof(destText), pstra("Turn-in: %s"), Q.DestinationName);
+                    if (hasSolution && solName[0])
+                        snprintf(destText, sizeof(destText), pstra("Solution: %s (%.0fm)"), solName, Q.Distance);
+                    else if (solName[0])
+                        snprintf(destText, sizeof(destText), pstra("Solution: %s"), solName);
                     else
-                        snprintf(destText, sizeof(destText), pstra("Turn-in: Marked on map"));
+                        snprintf(destText, sizeof(destText), pstra("Solution: Marked on map"));
 
-                    // Buttons on right
-                    float bw = 88.0f, bh = 24.0f;
+                    // Buttons on right (Go to NPC, Go to Spot, Go to Solution)
+                    float bw_npc = 78.0f;
+                    float bw_spot = 78.0f;
+                    float bw_sol = 88.0f;
+                    float bh = 24.0f;
                     float btn_gap = 6.0f;
-                    ImVec2 b2_max(rmax.x - 6.0f, (row_y0 + row_y1) * 0.5f + bh * 0.5f);
-                    ImVec2 b2_min(b2_max.x - bw, (row_y0 + row_y1) * 0.5f - bh * 0.5f);
-                    ImVec2 b1_max(b2_min.x - btn_gap, b2_max.y);
-                    ImVec2 b1_min(b1_max.x - bw, b2_min.y);
 
-                    float text_w = b1_min.x - rmin.x - 16.0f;
+                    ImVec2 b3_max(rmax.x - 6.0f, (row_y0 + row_y1) * 0.5f + bh * 0.5f);
+                    ImVec2 b3_min(b3_max.x - bw_sol, (row_y0 + row_y1) * 0.5f - bh * 0.5f);
+
+                    ImVec2 b2_max(b3_min.x - btn_gap, b3_max.y);
+                    ImVec2 b2_min(b2_max.x - bw_spot, b3_min.y);
+
+                    ImVec2 b1_max(b2_min.x - btn_gap, b3_max.y);
+                    ImVec2 b1_min(b1_max.x - bw_npc, b3_min.y);
+
+                    float text_w = b1_min.x - rmin.x - 14.0f;
 
                     char bufTitle[96];
                     const char* shownTitle = FitEllipsis(F_Med, secTitle, text_w, bufTitle, sizeof(bufTitle));
@@ -1340,18 +1358,19 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
 
                     char b1_id[32]; snprintf(b1_id, sizeof(b1_id), pstra("##q_npc_%u"), Q.QuestId);
                     char b2_id[32]; snprintf(b2_id, sizeof(b2_id), pstra("##q_spot_%u"), Q.QuestId);
+                    char b3_id[32]; snprintf(b3_id, sizeof(b3_id), pstra("##q_sol_%u"), Q.QuestId);
 
                     PushAlpha(col.a);
-                    if (Button(b1_id, b1_min, b1_max, pstra("Go to NPC"), hasNpcPos))
+                    if (Button(b1_id, b1_min, b1_max, pstra("Go to NPC"), hasStartNpc))
                     {
-                        if (hasNpcPos)
+                        if (hasStartNpc)
                         {
-                            ShaiyaOverlay::NavigationManager::WalkTo(npcPos, npcName, 2.5f);
-                            Blade::PushNotification(pstra("Walking to NPC..."), NT_INFO);
+                            ShaiyaOverlay::NavigationManager::WalkTo(startNpcPos, startNpcName, 2.5f);
+                            Blade::PushNotification(pstra("Walking to Quest NPC..."), NT_INFO);
                         }
                         else
                         {
-                            Blade::PushNotification(pstra("NPC position not found."), NT_WARNING);
+                            Blade::PushNotification(pstra("Quest NPC not found on current map."), NT_WARNING);
                         }
                     }
 
@@ -1365,6 +1384,19 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
                         else
                         {
                             Blade::PushNotification(pstra("Spot not cached yet. Approach once to save."), NT_WARNING);
+                        }
+                    }
+
+                    if (Button(b3_id, b3_min, b3_max, pstra("Go to Solution"), hasSolution))
+                    {
+                        if (hasSolution)
+                        {
+                            ShaiyaOverlay::NavigationManager::WalkTo(solPos, solName, 2.5f);
+                            Blade::PushNotification(pstra("Walking to quest solution..."), NT_INFO);
+                        }
+                        else
+                        {
+                            Blade::PushNotification(pstra("Solution destination not available on this map."), NT_WARNING);
                         }
                     }
                     PopAlpha();
