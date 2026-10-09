@@ -938,10 +938,12 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
     int selected_module = S.module_sel[3];
 
     static ImVec2 s_npc_box_min(0, 0), s_npc_box_max(0, 0);
-    bool over_npc_box = (selected_module == 3) && ImGui::IsMouseHoveringRect(s_npc_box_min, s_npc_box_max);
+    static ImVec2 s_quest_box_min(0, 0), s_quest_box_max(0, 0);
+    bool over_inner_box = ((selected_module == 3) && ImGui::IsMouseHoveringRect(s_npc_box_min, s_npc_box_max)) ||
+                          ((selected_module == 2) && ImGui::IsMouseHoveringRect(s_quest_box_min, s_quest_box_max));
 
     ImVec2 vmin(cx0, view_y0), vmax(max.x - 4.0f, view_y1);
-    if (ImGui::IsMouseHoveringRect(vmin, vmax) && !over_npc_box && ImGui::GetIO().MouseWheel != 0.0f)
+    if (ImGui::IsMouseHoveringRect(vmin, vmax) && !over_inner_box && ImGui::GetIO().MouseWheel != 0.0f)
         scroll -= ImGui::GetIO().MouseWheel * 42.0f;
     scroll = ImClamp(scroll, 0.0f, ImMax(content_h - view_h, 0.0f));
 
@@ -1029,235 +1031,369 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         unsigned int qCount = quests.GetCount();
         bool isNavigating = ShaiyaOverlay::NavigationManager::IsNavigating();
 
-        // Left Top Section: Navigation Status & Control
-        L.Section(pstra("Quest Navigation Control"), 2);
+        // Single-column full width layout
+        Col col;
+        col.dl = dl;
+        col.x = cx0 + CONT_PAD;
+        col.y = base_y;
+        col.w = cw - CONT_PAD * 2.0f;
+        const float cp = CardControlPadding();
+
+        // Top Card: Navigation Status & Control
+        col.Section(pstra("Quest Navigation Control"), 2);
         if (isNavigating)
         {
-            char navBuf[80];
+            char navBuf[96];
             snprintf(navBuf, sizeof(navBuf), pstra("Heading to: %s (%.0fm)"),
                      ShaiyaOverlay::NavigationManager::GetTargetName(),
                      ShaiyaOverlay::NavigationManager::GetRemainingDistance());
-            float rcy = L.Row(navBuf, false, nullptr, 75.0f);
-            float bw = 65.0f, bh = 22.0f;
-            const float cp = CardControlPadding();
-            ImVec2 bmin(L.x + L.w - cp - bw, rcy - bh * 0.5f);
-            ImVec2 bmax(L.x + L.w - cp, rcy + bh * 0.5f);
-            PushAlpha(L.a);
-            if (Button(pstra("##btn_stop_nav"), bmin, bmax, pstra("Stop"), true))
+            float rcy = col.Row(navBuf, false, nullptr, 90.0f);
+            float bw = 75.0f, bh = 24.0f;
+            ImVec2 bmin(col.x + col.w - cp - bw, rcy - bh * 0.5f);
+            ImVec2 bmax(col.x + col.w - cp, rcy + bh * 0.5f);
+            PushAlpha(col.a);
+            if (Button(pstra("##btn_stop_nav_quest"), bmin, bmax, pstra("Stop"), true))
             {
                 ShaiyaOverlay::NavigationManager::Stop();
-                Blade::PushNotification(pstra("Navigation cancelled."), NT_INFO);
+                Blade::PushNotification(pstra("Navigation stopped."), NT_INFO);
             }
             PopAlpha();
-            L.Row(pstra("A* Pathfinding & Collision: Active"), true);
+            col.Row(pstra("A* Pathfinding & Clearance: Active"), true);
         }
         else
         {
-            char countBuf[64];
-            snprintf(countBuf, sizeof(countBuf), pstra("Active Quests: %u"), qCount);
-            L.Row(countBuf, false);
-            L.Row(pstra("Click below to auto-walk to NPC or Spot"), true);
+            col.Row(pstra("Status: Idle (No active destination)"), false);
+            col.Row(pstra("Click below to auto-walk to Quest NPC or Monster Spot"), true);
         }
 
-        // Right Top Section: Waypoint Indicators
-        R.Section(pstra("Waypoint Overlay"), 2);
-        RowToggle(R, pstra("Draw Quest Waypoints"), pstra("##q_wp_toggle"), &settings.Visuals.QuestWaypoints, false);
-        RowColor(R, pstra("Waypoint Color"), pstra("##q_wp_col"), (ImVec4*)&settings.Visuals.QuestColor);
+        col.y += 12.0f;
 
-        L.y += 10.0f;
-        R.y += 10.0f;
+        // Block 1 (Top Block): Active Quests with Filter & Inner Scroll
+        static char s_quest_filter[48] = { 0 };
+        static float s_quest_scroll = 0.0f;
 
-        if (qCount == 0)
+        // Filter matched quests
+        struct FilteredQuestRef {
+            U32 index;
+            const ShaiyaOverlay::ActiveQuest* quest;
+        };
+        std::vector<FilteredQuestRef> matchedQuests;
+        matchedQuests.reserve(qCount);
+
+        for (U32 q = 0; q < qCount; ++q)
         {
-            L.Section(pstra("Active Quests"), 2);
-            L.Row(pstra("No active quests found."), true);
-            L.Row(pstra("Accept quests from NPCs to track here."), true);
-
-            R.Section(pstra("Gameplay Tip"), 2);
-            R.Row(pstra("Yellow waypoints indicate turn-in NPCs"), true);
-            R.Row(pstra("Monster spawn spots are recorded automatically"), true);
-        }
-        else
-        {
-            for (unsigned int q = 0; q < qCount; ++q)
+            const auto& Q = quests[q];
+            if (s_quest_filter[0] != '\0')
             {
-                const auto& Q = quests[q];
-                Col& c = (q % 2 == 0) ? L : R;
-
-                char secTitle[96];
-                snprintf(secTitle, sizeof(secTitle), pstra("[Q.%u] %s"), Q.QuestId, Q.Title[0] ? Q.Title : pstra("Quest"));
-
-                // Objectives text
-                char objText[160] = { 0 };
-                if (Q.ObjectiveCount == 0 && Q.ItemObjectiveCount == 0)
+                bool match = StringUtils::ContainsCaseInsensitive(Q.Title, s_quest_filter) ||
+                             StringUtils::ContainsCaseInsensitive(Q.DestinationName, s_quest_filter);
+                for (U32 o = 0; !match && o < Q.ObjectiveCount; ++o)
                 {
-                    snprintf(objText, sizeof(objText), "%s", pstra("Talk to NPC"));
+                    if (StringUtils::ContainsCaseInsensitive(Q.Objectives[o].TargetMobName, s_quest_filter))
+                        match = true;
                 }
-                else
+                for (U32 o = 0; !match && o < Q.ItemObjectiveCount; ++o)
                 {
-                    for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
-                    {
-                        char temp[64];
-                        snprintf(temp, sizeof(temp), "%s: %u/%u%s",
-                            Q.Objectives[o].TargetMobName[0] ? Q.Objectives[o].TargetMobName : pstra("Mob"),
-                            Q.Objectives[o].CurrentCount,
-                            Q.Objectives[o].CountNeeded,
-                            (o + 1 < Q.ObjectiveCount || Q.ItemObjectiveCount > 0) ? ", " : "");
-                        strcat_s(objText, sizeof(objText), temp);
-                    }
-                    for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
-                    {
-                        char temp[64];
-                        snprintf(temp, sizeof(temp), "%s: %u/%u%s",
-                            Q.ItemObjectives[o].ItemName[0] ? Q.ItemObjectives[o].ItemName : pstra("Item"),
-                            Q.ItemObjectives[o].CurrentCount,
-                            Q.ItemObjectives[o].CountNeeded,
-                            (o + 1 < Q.ItemObjectiveCount) ? ", " : "");
-                        strcat_s(objText, sizeof(objText), temp);
-                    }
+                    if (StringUtils::ContainsCaseInsensitive(Q.ItemObjectives[o].ItemName, s_quest_filter) ||
+                        StringUtils::ContainsCaseInsensitive(Q.ItemObjectives[o].DroppedByMobName, s_quest_filter))
+                        match = true;
                 }
+                if (!match)
+                    continue;
+            }
+            matchedQuests.push_back({ q, &Q });
+        }
 
-                // Turn-in NPC info
-                char destText[96];
-                if (Q.HasDestination && Q.DestinationName[0])
-                    snprintf(destText, sizeof(destText), pstra("NPC: %s (%.0fm)"), Q.DestinationName, Q.Distance);
-                else if (Q.DestinationName[0])
-                    snprintf(destText, sizeof(destText), pstra("NPC: %s"), Q.DestinationName);
-                else
-                    snprintf(destText, sizeof(destText), pstra("NPC: Marked on map"));
+        col.Section(pstra("Active Quests & Objectives"), 2);
+        RowTextInput(col, pstra("Filter Quests"), pstra("##quest_flt_input"), s_quest_filter, sizeof(s_quest_filter), pstra("Type quest title, mob or item name..."));
 
-                // Resolve NPC Pos
-                bool hasNpcPos = false;
-                Vector3 npcPos;
-                char npcName[64] = "NPC";
-                if (Q.HasDestination)
+        char qSummary[96];
+        snprintf(qSummary, sizeof(qSummary), pstra("Active Quests: %u (Matching: %zu)"), qCount, matchedQuests.size());
+        col.Row(qSummary, false);
+
+        // Inner scrolling container for Quests (keeps parent view compact)
+        const float inner_quest_h = 240.0f;
+        const float quest_item_h = 76.0f;
+        float quest_content_h = matchedQuests.empty() ? 40.0f : (matchedQuests.size() * quest_item_h);
+
+        ImVec2 gmin(col.x, col.y + 6.0f);
+        ImVec2 gmax(col.x + col.w, gmin.y + inner_quest_h);
+        s_quest_box_min = gmin;
+        s_quest_box_max = gmax;
+
+        // Inner scrollbar drag handling
+        static bool s_quest_dragging = false;
+        if (quest_content_h > inner_quest_h)
+        {
+            float tx = gmax.x - 6.0f;
+            float ratio = inner_quest_h / quest_content_h;
+            float bh = ImMax(inner_quest_h * ratio, 24.0f);
+
+            ImVec2 track_min(tx - 6.0f, gmin.y);
+            ImVec2 track_max(gmax.x, gmax.y);
+
+            if (ImGui::IsMouseClicked(0) && ImGui::IsMouseHoveringRect(track_min, track_max))
+                s_quest_dragging = true;
+            if (!ImGui::IsMouseDown(0))
+                s_quest_dragging = false;
+
+            if (s_quest_dragging)
+            {
+                float my = ImGui::GetIO().MousePos.y - gmin.y - bh * 0.5f;
+                float norm = ImClamp(my / ImMax(inner_quest_h - bh, 1.0f), 0.0f, 1.0f);
+                s_quest_scroll = norm * (quest_content_h - inner_quest_h);
+            }
+        }
+        else
+        {
+            s_quest_dragging = false;
+        }
+
+        // Handle inner mouse wheel scrolling when hovering quest box or dragging scrollbar
+        if ((over_inner_box || s_quest_dragging) && ImGui::GetIO().MouseWheel != 0.0f && (selected_module == 2))
+        {
+            s_quest_scroll -= ImGui::GetIO().MouseWheel * 36.0f;
+        }
+        s_quest_scroll = ImClamp(s_quest_scroll, 0.0f, ImMax(quest_content_h - inner_quest_h, 0.0f));
+
+        // Draw inner container background & border
+        RectFilled(dl, gmin, gmax, Fade(C.row, col.a * 0.65f), 8.0f);
+        RectStroke(dl, gmin, gmax, Fade(C.divider, col.a), 8.0f);
+
+        dl->PushClipRect(gmin, gmax, true);
+        if (matchedQuests.empty())
+        {
+            const char* emptyMsg = (qCount == 0)
+                ? pstra("No active quests found. Accept quests from NPCs to track here.")
+                : pstra("No quests matching current filter criteria.");
+            ImVec2 ems = Measure(F_Body, emptyMsg);
+            TextAt(dl, F_Body, ImVec2(gmin.x + (col.w - ems.x) * 0.5f, gmin.y + (inner_quest_h - ems.y) * 0.5f), Fade(C.text_mute, col.a), emptyMsg);
+        }
+        else
+        {
+            float cur_y = gmin.y + 2.0f - s_quest_scroll;
+            for (size_t m = 0; m < matchedQuests.size(); ++m)
+            {
+                float row_y0 = cur_y + m * quest_item_h;
+                float row_y1 = row_y0 + quest_item_h;
+
+                if (row_y1 >= gmin.y && row_y0 <= gmax.y)
                 {
-                    npcPos = Q.DestinationPos;
-                    StringUtils::Copy(npcName, Q.DestinationName, sizeof(npcName));
-                    hasNpcPos = true;
-                }
-                for (unsigned int k = 0; k < markers.GetCount(); ++k)
-                {
-                    const auto& M = markers[k];
-                    if (M.IsTurnIn && (M.QuestId == Q.QuestId || (hasNpcPos && M.Position.DistanceTo(npcPos) < 5.0f)))
+                    ImVec2 rmin(gmin.x + 4.0f, row_y0);
+                    ImVec2 rmax(gmax.x - (quest_content_h > inner_quest_h ? 14.0f : 4.0f), row_y1);
+
+                    bool hov = ImGui::IsMouseHoveringRect(rmin, rmax);
+                    if (hov)
+                        RectFilled(dl, rmin, rmax, Fade(C.row_hover, col.a), 6.0f);
+
+                    if (m > 0)
+                        dl->AddLine(ImVec2(rmin.x + 8.0f, row_y0), ImVec2(rmax.x - 8.0f, row_y0), Fade(C.divider, col.a * 0.5f), 1.0f);
+
+                    const auto& Q = *matchedQuests[m].quest;
+
+                    // Resolve NPC Pos
+                    bool hasNpcPos = false;
+                    Vector3 npcPos;
+                    char npcName[64] = "NPC";
+                    if (Q.HasDestination)
                     {
-                        npcPos = M.Position;
-                        StringUtils::Copy(npcName, M.NpcName, sizeof(npcName));
+                        npcPos = Q.DestinationPos;
+                        StringUtils::Copy(npcName, Q.DestinationName, sizeof(npcName));
                         hasNpcPos = true;
-                        break;
                     }
-                }
-
-                // Resolve Spot Pos
-                unsigned short targetMobId = 0;
-                const char* mobLabel = nullptr;
-                for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
-                {
-                    if (!Q.Objectives[o].Completed && Q.Objectives[o].TargetMobId > 0)
+                    for (unsigned int k = 0; k < markers.GetCount(); ++k)
                     {
-                        targetMobId = Q.Objectives[o].TargetMobId;
-                        mobLabel = Q.Objectives[o].TargetMobName;
-                        break;
-                    }
-                }
-                if (targetMobId == 0)
-                {
-                    for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
-                    {
-                        if (!Q.ItemObjectives[o].Completed && Q.ItemObjectives[o].DroppedByMobId > 0)
+                        const auto& M = markers[k];
+                        if (M.IsTurnIn && (M.QuestId == Q.QuestId || (hasNpcPos && M.Position.DistanceTo(npcPos) < 5.0f)))
                         {
-                            targetMobId = Q.ItemObjectives[o].DroppedByMobId;
-                            mobLabel = Q.ItemObjectives[o].DroppedByMobName;
+                            npcPos = M.Position;
+                            StringUtils::Copy(npcName, M.NpcName, sizeof(npcName));
+                            hasNpcPos = true;
                             break;
                         }
                     }
-                }
 
-                bool hasSpotPos = false;
-                Vector3 spotPos;
-                char spotName[64] = "Spot";
-
-                // Check 1: live nearby mob
-                float bestDist = 99999.0f;
-                for (unsigned int m = 0; m < monsters.GetCount(); ++m)
-                {
-                    const auto& mob = monsters[m];
-                    bool match = (targetMobId > 0 && mob.MobId == targetMobId);
-                    if (!match && mobLabel && mobLabel[0] != '\0')
+                    // Resolve Spot Pos
+                    unsigned short targetMobId = 0;
+                    const char* mobLabel = nullptr;
+                    for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
                     {
-                        match = StringUtils::ContainsCaseInsensitive(mob.Name, mobLabel);
+                        if (!Q.Objectives[o].Completed && Q.Objectives[o].TargetMobId > 0)
+                        {
+                            targetMobId = Q.Objectives[o].TargetMobId;
+                            mobLabel = Q.Objectives[o].TargetMobName;
+                            break;
+                        }
                     }
-                    if (mob.Alive && match && mob.Distance < bestDist)
+                    if (targetMobId == 0)
                     {
-                        bestDist = mob.Distance;
-                        spotPos = mob.Position;
-                        StringUtils::Copy(spotName, mob.Name, sizeof(spotName));
-                        hasSpotPos = true;
+                        for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
+                        {
+                            if (!Q.ItemObjectives[o].Completed && Q.ItemObjectives[o].DroppedByMobId > 0)
+                            {
+                                targetMobId = Q.ItemObjectives[o].DroppedByMobId;
+                                mobLabel = Q.ItemObjectives[o].DroppedByMobName;
+                                break;
+                            }
+                        }
                     }
-                }
 
-                // Check 2: cached spawn position from quest_mob_cache
-                if (!hasSpotPos && targetMobId > 0)
-                {
-                    Vector3 cachedPos;
-                    char cachedName[64] = { 0 };
-                    if (ShaiyaOverlay::QuestManager::GetSavedMobPosition(Q.QuestId, targetMobId, cachedPos, cachedName, sizeof(cachedName)))
+                    bool hasSpotPos = false;
+                    Vector3 spotPos;
+                    char spotName[64] = "Spot";
+
+                    // Check 1: live nearby mob
+                    float bestDist = 99999.0f;
+                    for (unsigned int mobIdx = 0; mobIdx < monsters.GetCount(); ++mobIdx)
                     {
-                        spotPos = cachedPos;
-                        StringUtils::Copy(spotName, cachedName[0] ? cachedName : (mobLabel ? mobLabel : "Quest Spot"), sizeof(spotName));
-                        hasSpotPos = true;
+                        const auto& mob = monsters[mobIdx];
+                        bool match = (targetMobId > 0 && mob.MobId == targetMobId);
+                        if (!match && mobLabel && mobLabel[0] != '\0')
+                        {
+                            match = StringUtils::ContainsCaseInsensitive(mob.Name, mobLabel);
+                        }
+                        if (mob.Alive && match && mob.Distance < bestDist)
+                        {
+                            bestDist = mob.Distance;
+                            spotPos = mob.Position;
+                            StringUtils::Copy(spotName, mob.Name, sizeof(spotName));
+                            hasSpotPos = true;
+                        }
                     }
-                }
 
-                if (q >= 2)
-                    c.y += 8.0f;
-
-                c.Section(secTitle, 3);
-                c.Row(objText, false);
-                c.Row(destText, true);
-
-                float bcy = c.Row(nullptr);
-                const float cp = CardControlPadding();
-                float btn_gap = 6.0f;
-                float btn_w = (c.w - cp * 2.0f - btn_gap) * 0.5f;
-
-                ImVec2 b1_min(c.x + cp, bcy - 12.0f);
-                ImVec2 b1_max(b1_min.x + btn_w, bcy + 12.0f);
-                ImVec2 b2_min(b1_max.x + btn_gap, bcy - 12.0f);
-                ImVec2 b2_max(b2_min.x + btn_w, bcy + 12.0f);
-
-                char b1_id[32]; snprintf(b1_id, sizeof(b1_id), pstra("##q_npc_%u"), Q.QuestId);
-                char b2_id[32]; snprintf(b2_id, sizeof(b2_id), pstra("##q_spot_%u"), Q.QuestId);
-
-                PushAlpha(c.a);
-                if (Button(b1_id, b1_min, b1_max, pstra("Go to NPC"), hasNpcPos))
-                {
-                    if (hasNpcPos)
+                    // Check 2: cached spawn position
+                    if (!hasSpotPos && targetMobId > 0)
                     {
-                        ShaiyaOverlay::NavigationManager::WalkTo(npcPos, npcName, 2.5f);
-                        Blade::PushNotification(pstra("Walking to NPC..."), NT_INFO);
+                        Vector3 cachedPos;
+                        char cachedName[64] = { 0 };
+                        if (ShaiyaOverlay::QuestManager::GetSavedMobPosition(Q.QuestId, targetMobId, cachedPos, cachedName, sizeof(cachedName)))
+                        {
+                            spotPos = cachedPos;
+                            StringUtils::Copy(spotName, cachedName[0] ? cachedName : (mobLabel ? mobLabel : "Quest Spot"), sizeof(spotName));
+                            hasSpotPos = true;
+                        }
                     }
-                    else
-                    {
-                        Blade::PushNotification(pstra("NPC position not found."), NT_WARNING);
-                    }
-                }
 
-                if (Button(b2_id, b2_min, b2_max, pstra("Go to Spot"), hasSpotPos))
-                {
-                    if (hasSpotPos)
+                    // Format Strings
+                    char secTitle[96];
+                    snprintf(secTitle, sizeof(secTitle), pstra("[Q.%u] %s"), Q.QuestId, Q.Title[0] ? Q.Title : pstra("Quest"));
+
+                    char objText[160] = { 0 };
+                    if (Q.ObjectiveCount == 0 && Q.ItemObjectiveCount == 0)
                     {
-                        ShaiyaOverlay::NavigationManager::WalkTo(spotPos, spotName, 2.5f);
-                        Blade::PushNotification(pstra("Walking to spot..."), NT_INFO);
+                        snprintf(objText, sizeof(objText), "%s", pstra("Task: Talk to NPC"));
                     }
                     else
                     {
-                        Blade::PushNotification(pstra("Spot not cached yet. Approach once to save."), NT_WARNING);
+                        snprintf(objText, sizeof(objText), "%s: ", pstra("Task"));
+                        for (unsigned int o = 0; o < Q.ObjectiveCount; ++o)
+                        {
+                            char temp[64];
+                            snprintf(temp, sizeof(temp), "%s: %u/%u%s",
+                                Q.Objectives[o].TargetMobName[0] ? Q.Objectives[o].TargetMobName : pstra("Mob"),
+                                Q.Objectives[o].CurrentCount,
+                                Q.Objectives[o].CountNeeded,
+                                (o + 1 < Q.ObjectiveCount || Q.ItemObjectiveCount > 0) ? ", " : "");
+                            strcat_s(objText, sizeof(objText), temp);
+                        }
+                        for (unsigned int o = 0; o < Q.ItemObjectiveCount; ++o)
+                        {
+                            char temp[64];
+                            snprintf(temp, sizeof(temp), "%s: %u/%u%s",
+                                Q.ItemObjectives[o].ItemName[0] ? Q.ItemObjectives[o].ItemName : pstra("Item"),
+                                Q.ItemObjectives[o].CurrentCount,
+                                Q.ItemObjectives[o].CountNeeded,
+                                (o + 1 < Q.ItemObjectiveCount) ? ", " : "");
+                            strcat_s(objText, sizeof(objText), temp);
+                        }
                     }
+
+                    char destText[96];
+                    if (Q.HasDestination && Q.DestinationName[0])
+                        snprintf(destText, sizeof(destText), pstra("Turn-in: %s (%.0fm)"), Q.DestinationName, Q.Distance);
+                    else if (Q.DestinationName[0])
+                        snprintf(destText, sizeof(destText), pstra("Turn-in: %s"), Q.DestinationName);
+                    else
+                        snprintf(destText, sizeof(destText), pstra("Turn-in: Marked on map"));
+
+                    // Buttons on right
+                    float bw = 88.0f, bh = 24.0f;
+                    float btn_gap = 6.0f;
+                    ImVec2 b2_max(rmax.x - 6.0f, (row_y0 + row_y1) * 0.5f + bh * 0.5f);
+                    ImVec2 b2_min(b2_max.x - bw, (row_y0 + row_y1) * 0.5f - bh * 0.5f);
+                    ImVec2 b1_max(b2_min.x - btn_gap, b2_max.y);
+                    ImVec2 b1_min(b1_max.x - bw, b2_min.y);
+
+                    float text_w = b1_min.x - rmin.x - 16.0f;
+
+                    char bufTitle[96];
+                    const char* shownTitle = FitEllipsis(F_Med, secTitle, text_w, bufTitle, sizeof(bufTitle));
+                    TextAt(dl, F_Med, ImVec2(rmin.x + 10.0f, row_y0 + 8.0f), Fade(C.text, col.a), shownTitle);
+
+                    char bufObj[160];
+                    const char* shownObj = FitEllipsis(F_Small, objText, text_w, bufObj, sizeof(bufObj));
+                    TextAt(dl, F_Small, ImVec2(rmin.x + 10.0f, row_y0 + 30.0f), Fade(C.text_mute, col.a), shownObj);
+
+                    char bufDest[96];
+                    const char* shownDest = FitEllipsis(F_Small, destText, text_w, bufDest, sizeof(bufDest));
+                    TextAt(dl, F_Small, ImVec2(rmin.x + 10.0f, row_y0 + 49.0f), Fade(C.text_dim, col.a), shownDest);
+
+                    char b1_id[32]; snprintf(b1_id, sizeof(b1_id), pstra("##q_npc_%u"), Q.QuestId);
+                    char b2_id[32]; snprintf(b2_id, sizeof(b2_id), pstra("##q_spot_%u"), Q.QuestId);
+
+                    PushAlpha(col.a);
+                    if (Button(b1_id, b1_min, b1_max, pstra("Go to NPC"), hasNpcPos))
+                    {
+                        if (hasNpcPos)
+                        {
+                            ShaiyaOverlay::NavigationManager::WalkTo(npcPos, npcName, 2.5f);
+                            Blade::PushNotification(pstra("Walking to NPC..."), NT_INFO);
+                        }
+                        else
+                        {
+                            Blade::PushNotification(pstra("NPC position not found."), NT_WARNING);
+                        }
+                    }
+
+                    if (Button(b2_id, b2_min, b2_max, pstra("Go to Spot"), hasSpotPos))
+                    {
+                        if (hasSpotPos)
+                        {
+                            ShaiyaOverlay::NavigationManager::WalkTo(spotPos, spotName, 2.5f);
+                            Blade::PushNotification(pstra("Walking to spot..."), NT_INFO);
+                        }
+                        else
+                        {
+                            Blade::PushNotification(pstra("Spot not cached yet. Approach once to save."), NT_WARNING);
+                        }
+                    }
+                    PopAlpha();
                 }
-                PopAlpha();
             }
         }
+        dl->PopClipRect();
+
+        // Inner scrollbar
+        if (quest_content_h > inner_quest_h)
+        {
+            float tx = gmax.x - 6.0f;
+            float ratio = inner_quest_h / quest_content_h;
+            float bh = ImMax(inner_quest_h * ratio, 24.0f);
+            float by = gmin.y + (inner_quest_h - bh) * (s_quest_scroll / ImMax(quest_content_h - inner_quest_h, 1.0f));
+            RectFilled(dl, ImVec2(tx - 1.5f, gmin.y + 4.0f), ImVec2(tx + 1.5f, gmax.y - 4.0f), Fade(C.separator, col.a), 1.5f);
+            RectFilled(dl, ImVec2(tx - 1.5f, by), ImVec2(tx + 1.5f, by + bh), Fade(s_quest_dragging ? C.accent : C.scroll, col.a), 1.5f);
+        }
+
+        col.y = gmax.y + 14.0f;
+
+        // Waypoint Overlay Settings
+        col.Section(pstra("Waypoint Overlay & Settings"), 2);
+        RowToggle(col, pstra("Draw Quest Waypoints"), pstra("##q_wp_toggle"), &settings.Visuals.QuestWaypoints, false);
+        RowColor(col, pstra("Waypoint Color"), pstra("##q_wp_col"), (ImVec4*)&settings.Visuals.QuestColor);
+        col.Row(pstra("Yellow markers highlight turn-in NPCs; monster spots are recorded automatically"), true);
+
+        L.y = col.y;
+        R.y = col.y;
     }
     else // Navigator (selected_module == 3)
     {
@@ -1383,7 +1519,7 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         }
 
         // Handle inner mouse wheel scrolling when hovering NPC box or dragging scrollbar
-        if ((over_npc_box || s_inner_dragging) && ImGui::GetIO().MouseWheel != 0.0f)
+        if ((over_inner_box || s_inner_dragging) && ImGui::GetIO().MouseWheel != 0.0f && (selected_module == 3))
         {
             s_npc_scroll -= ImGui::GetIO().MouseWheel * 36.0f;
         }
