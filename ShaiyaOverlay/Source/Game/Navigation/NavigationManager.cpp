@@ -235,36 +235,30 @@ namespace ShaiyaOverlay
 
         // 2. Left shoulder ray (check sideways clearance relative to center track)
         Vector3 LeftStart = { Start.X + PerpX, Start.Y, Start.Z + PerpZ };
-        LeftStart.Y = GetGroundHeight(LeftStart.X, LeftStart.Z);
+        F32 lsy = GetGroundHeight(LeftStart.X, LeftStart.Z);
+        if (lsy != 0.0f && fabsf(lsy - Start.Y) < 1.8f) LeftStart.Y = lsy;
+
         Vector3 LeftEnd = { End.X + PerpX, End.Y, End.Z + PerpZ };
-        LeftEnd.Y = GetGroundHeight(LeftEnd.X, LeftEnd.Z);
+        F32 ley = GetGroundHeight(LeftEnd.X, LeftEnd.Z);
+        if (ley != 0.0f && fabsf(ley - End.Y) < 1.8f) LeftEnd.Y = ley;
 
-        if (LeftStart.Y == 0.0f || LeftEnd.Y == 0.0f)
-            return false; // Ground is missing or inside solid building boundary
-
-        if (fabsf(LeftStart.Y - Start.Y) > 0.85f || fabsf(LeftEnd.Y - End.Y) > 0.85f)
-            return false; // Steep sideways drop or cliff wall at shoulder
-
-        // Left shoulder Torso (+0.95m) and Head (+1.75m)
-        if (!CheckLineOfSightElevated(LeftStart, LeftEnd, 0.95f) ||
-            !CheckLineOfSightElevated(LeftStart, LeftEnd, 1.75f))
-            return false;
+        bool leftBlocked = !CheckLineOfSightElevated(LeftStart, LeftEnd, 0.95f) ||
+                           !CheckLineOfSightElevated(LeftStart, LeftEnd, 1.75f);
 
         // 3. Right shoulder ray (check sideways clearance relative to center track)
         Vector3 RightStart = { Start.X - PerpX, Start.Y, Start.Z - PerpZ };
-        RightStart.Y = GetGroundHeight(RightStart.X, RightStart.Z);
+        F32 rsy = GetGroundHeight(RightStart.X, RightStart.Z);
+        if (rsy != 0.0f && fabsf(rsy - Start.Y) < 1.8f) RightStart.Y = rsy;
+
         Vector3 RightEnd = { End.X - PerpX, End.Y, End.Z - PerpZ };
-        RightEnd.Y = GetGroundHeight(RightEnd.X, RightEnd.Z);
+        F32 rey = GetGroundHeight(RightEnd.X, RightEnd.Z);
+        if (rey != 0.0f && fabsf(rey - End.Y) < 1.8f) RightEnd.Y = rey;
 
-        if (RightStart.Y == 0.0f || RightEnd.Y == 0.0f)
-            return false; // Ground is missing or inside solid building boundary
+        bool rightBlocked = !CheckLineOfSightElevated(RightStart, RightEnd, 0.95f) ||
+                            !CheckLineOfSightElevated(RightStart, RightEnd, 1.75f);
 
-        if (fabsf(RightStart.Y - Start.Y) > 0.85f || fabsf(RightEnd.Y - End.Y) > 0.85f)
-            return false; // Steep sideways drop or cliff wall at shoulder
-
-        // Right shoulder Torso (+0.95m) and Head (+1.75m)
-        if (!CheckLineOfSightElevated(RightStart, RightEnd, 0.95f) ||
-            !CheckLineOfSightElevated(RightStart, RightEnd, 1.75f))
+        // Only reject if both sides are blocked (e.g. gap narrower than character width)
+        if (leftBlocked && rightBlocked)
             return false;
 
         return true;
@@ -285,13 +279,13 @@ namespace ShaiyaOverlay
         if (EndY == 0.0f) EndY = End.Y;
 
         F32 deltaY = EndY - StartY;
-        if (deltaY > 0.0f && (deltaY / Dist) > 0.70f)
+        if (deltaY > 0.0f && (deltaY / Dist) > 0.75f)
             return false;
-        if (deltaY < 0.0f && (-deltaY / Dist) > 0.85f)
+        if (deltaY < 0.0f && (-deltaY / Dist) > 2.2f && -deltaY > 2.8f)
             return false;
 
-        // Width clearance corridor check (0.70m radius = 1.40m clear corridor with full height clearance)
-        if (!CheckWalkableClearance(Start, End, 0.70f))
+        // Width clearance corridor check (0.40m radius = 0.80m clear corridor with full height clearance)
+        if (!CheckWalkableClearance(Start, End, 0.40f))
             return false;
 
         // Sample intermediate terrain elevation every 2.0 meters along the line
@@ -308,12 +302,12 @@ namespace ShaiyaOverlay
             F32 sx = Start.X + Dx * t;
             F32 sz = Start.Z + Dz * t;
             F32 actualY = GetGroundHeight(sx, sz);
-            if (actualY == 0.0f)
-                return false;
+            if (actualY == 0.0f || actualY < -0.05f)
+                return false; // Void or submerged in water
 
-            // Slope between consecutive samples (prevents crossing steep steps > 35 deg uphill, > 40 deg downhill)
+            // Slope between consecutive samples
             F32 stepSlope = (actualY - prevY) / sampleStep;
-            if (stepSlope > 0.70f || stepSlope < -0.85f)
+            if (stepSlope > 0.75f || (stepSlope < -2.2f && (prevY - actualY) > 2.8f))
                 return false;
 
             F32 expectedY = Start.Y + (End.Y - Start.Y) * t;
@@ -401,14 +395,20 @@ namespace ShaiyaOverlay
             return 0;
 
         Vector3 AdjustedGoal = Goal;
-        F32 GoalGroundY = GetGroundHeight(AdjustedGoal.X, AdjustedGoal.Z);
-        if (GoalGroundY != 0.0f)
-            AdjustedGoal.Y = GoalGroundY;
+        if (AdjustedGoal.Y == 0.0f)
+        {
+            F32 GoalGroundY = GetGroundHeight(AdjustedGoal.X, AdjustedGoal.Z);
+            if (GoalGroundY != 0.0f)
+                AdjustedGoal.Y = GoalGroundY;
+        }
 
         Vector3 AdjustedStart = Start;
-        F32 StartGroundY = GetGroundHeight(AdjustedStart.X, AdjustedStart.Z);
-        if (StartGroundY != 0.0f)
-            AdjustedStart.Y = StartGroundY;
+        if (AdjustedStart.Y == 0.0f)
+        {
+            F32 StartGroundY = GetGroundHeight(AdjustedStart.X, AdjustedStart.Z);
+            if (StartGroundY != 0.0f)
+                AdjustedStart.Y = StartGroundY;
+        }
 
         F32 Dx = AdjustedGoal.X - AdjustedStart.X;
         F32 Dz = AdjustedGoal.Z - AdjustedStart.Z;
@@ -428,7 +428,9 @@ namespace ShaiyaOverlay
 
         // Grid setup: 256x256 grid covers full distance with adaptive detour margin
         const int GridDim = 256;
-        F32 DetourMargin = (TotalDist > 60.0f) ? (TotalDist * 1.35f + 160.0f) : (TotalDist + 40.0f);
+        F32 DetourMargin = TotalDist * 1.35f + 250.0f;
+        if (DetourMargin < 350.0f)
+            DetourMargin = 350.0f;
         F32 DesiredSpan = DetourMargin;
         F32 CellSize = DesiredSpan / static_cast<F32>(GridDim - 4);
         if (CellSize < 0.75f) CellSize = 0.75f;
@@ -545,7 +547,7 @@ namespace ShaiyaOverlay
         };
 
         int iterations = 0;
-        const int maxIterations = 20000;
+        const int maxIterations = 60000;
 
         while (HeapSize > 0 && iterations < maxIterations)
         {
@@ -590,36 +592,37 @@ namespace ShaiyaOverlay
                 if (Grid[nx][nz].state == 2 || Grid[nx][nz].state == 3) continue;
 
                 F32 nWY = GetOrComputeHeight(nx, nz);
-                if (nWY == 0.0f)
+                // Void (0.0f) or submerged in water (< -0.05f)
+                if (nWY == 0.0f || nWY < -0.05f)
                 {
                     Grid[nx][nz].state = 3;
                     continue;
                 }
 
-                // Slopes: uphill <= 0.70, downhill <= 0.85
+                // Slopes: uphill <= 0.75, downhill <= 2.20
                 F32 stepDist = costs[i];
                 F32 deltaY = nWY - curWY;
 
                 if (deltaY > 0.0f)
                 {
-                    if ((deltaY / stepDist) > 0.70f)
+                    if ((deltaY / stepDist) > 0.75f)
                     {
                         continue;
                     }
                 }
                 else
                 {
-                    if ((-deltaY / stepDist) > 0.85f)
+                    if ((-deltaY / stepDist) > 2.20f && -deltaY > 2.80f)
                     {
                         continue;
                     }
                 }
 
-                // Fast torso-level raycast check between adjacent grid cells
+                // Line of sight check (torso, knees, and head) between adjacent grid cells
                 F32 nWX = GridToWorldX(nx);
                 F32 nWZ = GridToWorldZ(nz);
                 Vector3 nPos = { nWX, nWY, nWZ };
-                if (!CheckLineOfSightElevated(curPos, nPos, 0.95f))
+                if (!CheckLineOfSight(curPos, nPos))
                 {
                     continue;
                 }
@@ -646,7 +649,7 @@ namespace ShaiyaOverlay
         int tx = bestX;
         int tz = bestZ;
 
-        Vector3 RawPath[512];
+        Vector3 RawPath[1024];
         int RawCount = 0;
 
         F32 bestWX = GridToWorldX(bestX);
@@ -659,7 +662,7 @@ namespace ShaiyaOverlay
             RawPath[RawCount++] = AdjustedGoal;
         }
 
-        while (tx != -1 && tz != -1 && RawCount < 500)
+        while (tx != -1 && tz != -1 && RawCount < 1000)
         {
             F32 wx = GridToWorldX(tx);
             F32 wz = GridToWorldZ(tz);
@@ -839,8 +842,10 @@ namespace ShaiyaOverlay
 
         if (Offsets.KeyBuffer)
         {
-            UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
-            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x00;
+            UINT scanW = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanW) = 0x00;
+            UINT scanS = MapVirtualKeyA('S', MAPVK_VK_TO_VSC);
+            *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanS) = 0x00;
         }
 
         KeyIsDown = false;
@@ -933,6 +938,8 @@ namespace ShaiyaOverlay
 
             if (Offsets.KeyBuffer)
             {
+                UINT scanS = MapVirtualKeyA('S', MAPVK_VK_TO_VSC);
+                *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanS) = 0x00;
                 UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
                 *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x80;
                 KeyIsDown = true;
@@ -984,11 +991,13 @@ namespace ShaiyaOverlay
 
                 Logger::Info("Navigation: Re-routing asynchronously from stuck position...");
 
-                // Release key briefly to stop momentum/sliding
+                // Release W and back up with S to disengage from wall collision
                 if (Offsets.KeyBuffer)
                 {
-                    UINT scanCode = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
-                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanCode) = 0x00;
+                    UINT scanW = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
+                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanW) = 0x00;
+                    UINT scanS = MapVirtualKeyA('S', MAPVK_VK_TO_VSC);
+                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanS) = 0x80;
                 }
                 if (Hwnd && KeyIsDown)
                 {
