@@ -1415,9 +1415,7 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
                     ImVec2 rmin(gmin.x + 4.0f, row_y0);
                     ImVec2 rmax(gmax.x - (npc_content_h > inner_npc_h ? 14.0f : 4.0f), row_y1);
 
-                    bool hov = false;
-                    char hitId[32]; snprintf(hitId, sizeof(hitId), pstra("##npc_row_hit_%u"), matchedNpcs[m].index);
-                    Hitbox(hitId, rmin, rmax, &hov);
+                    bool hov = ImGui::IsMouseHoveringRect(rmin, rmax);
                     if (hov)
                         RectFilled(dl, rmin, rmax, Fade(C.row_hover, col.a), 6.0f);
 
@@ -1436,7 +1434,7 @@ static void DrawToolsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
                     TextAt(dl, F_Body, ImVec2(rmin.x + 10.0f, (row_y0 + row_y1) * 0.5f - ts.y * 0.5f), Fade(C.text, col.a), shown);
 
                     // Button Go to NPC
-                    float bw = 85.0f, bh = 22.0f;
+                    float bw = 88.0f, bh = 24.0f;
                     ImVec2 bmin(rmax.x - bw - 6.0f, (row_y0 + row_y1) * 0.5f - bh * 0.5f);
                     ImVec2 bmax(rmax.x - 6.0f, (row_y0 + row_y1) * 0.5f + bh * 0.5f);
                     char bid[32]; snprintf(bid, sizeof(bid), pstra("##go_npc_%u"), matchedNpcs[m].index);
