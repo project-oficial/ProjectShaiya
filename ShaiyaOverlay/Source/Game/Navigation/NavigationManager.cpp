@@ -279,9 +279,9 @@ namespace ShaiyaOverlay
         if (EndY == 0.0f) EndY = End.Y;
 
         F32 deltaY = EndY - StartY;
-        if (deltaY > 0.0f && (deltaY / Dist) > 0.75f)
+        if (deltaY > 0.0f && (deltaY / Dist) > 0.60f)
             return false;
-        if (deltaY < 0.0f && (-deltaY / Dist) > 2.2f && -deltaY > 2.8f)
+        if (deltaY < 0.0f && (-deltaY / Dist) > 0.85f && -deltaY > 1.80f)
             return false;
 
         // Width clearance corridor check (0.40m radius = 0.80m clear corridor with full height clearance)
@@ -307,7 +307,7 @@ namespace ShaiyaOverlay
 
             // Slope between consecutive samples
             F32 stepSlope = (actualY - prevY) / sampleStep;
-            if (stepSlope > 0.75f || (stepSlope < -2.2f && (prevY - actualY) > 2.8f))
+            if (stepSlope > 0.60f || (stepSlope < -0.85f && (prevY - actualY) > 1.80f))
                 return false;
 
             F32 expectedY = Start.Y + (End.Y - Start.Y) * t;
@@ -403,12 +403,9 @@ namespace ShaiyaOverlay
         }
 
         Vector3 AdjustedStart = Start;
-        if (AdjustedStart.Y == 0.0f)
-        {
-            F32 StartGroundY = GetGroundHeight(AdjustedStart.X, AdjustedStart.Z);
-            if (StartGroundY != 0.0f)
-                AdjustedStart.Y = StartGroundY;
-        }
+        F32 StartGroundY = GetGroundHeight(AdjustedStart.X, AdjustedStart.Z);
+        if (StartGroundY != 0.0f)
+            AdjustedStart.Y = StartGroundY;
 
         F32 Dx = AdjustedGoal.X - AdjustedStart.X;
         F32 Dz = AdjustedGoal.Z - AdjustedStart.Z;
@@ -599,20 +596,20 @@ namespace ShaiyaOverlay
                     continue;
                 }
 
-                // Slopes: uphill <= 0.75, downhill <= 2.20
+                // Slopes: uphill <= 0.60, downhill <= 0.85 (Shaiya character max walk slope without slipping is ~0.62)
                 F32 stepDist = costs[i];
                 F32 deltaY = nWY - curWY;
 
                 if (deltaY > 0.0f)
                 {
-                    if ((deltaY / stepDist) > 0.75f)
+                    if ((deltaY / stepDist) > 0.60f)
                     {
                         continue;
                     }
                 }
                 else
                 {
-                    if ((-deltaY / stepDist) > 2.20f && -deltaY > 2.80f)
+                    if ((-deltaY / stepDist) > 0.85f && -deltaY > 1.80f)
                     {
                         continue;
                     }
@@ -991,13 +988,13 @@ namespace ShaiyaOverlay
 
                 Logger::Info("Navigation: Re-routing asynchronously from stuck position...");
 
-                // Release W and back up with S to disengage from wall collision
+                // Release W and clear any held keys
                 if (Offsets.KeyBuffer)
                 {
                     UINT scanW = MapVirtualKeyA('W', MAPVK_VK_TO_VSC);
                     *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanW) = 0x00;
                     UINT scanS = MapVirtualKeyA('S', MAPVK_VK_TO_VSC);
-                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanS) = 0x80;
+                    *reinterpret_cast<U8*>(Offsets.KeyBuffer + scanS) = 0x00;
                 }
                 if (Hwnd && KeyIsDown)
                 {
@@ -1032,6 +1029,13 @@ namespace ShaiyaOverlay
         F32 Dz = CurrentTarget.Z - CurPos.Z;
         F32 DistToWaypoint = Vector3::Sqrt(Dx * Dx + Dz * Dz);
 
+        // Advance to next waypoint if physically close or past waypoint along travel vector
+        Vector3 PrevPt = (CurrentWaypointIndex == 0) ? PathStartPos : Waypoints[CurrentWaypointIndex - 1];
+        F32 SegX = CurrentTarget.X - PrevPt.X;
+        F32 SegZ = CurrentTarget.Z - PrevPt.Z;
+        F32 DotPast = (CurPos.X - CurrentTarget.X) * SegX + (CurPos.Z - CurrentTarget.Z) * SegZ;
+
+        bool canAdvance = false;
         if (isFinalWaypoint)
         {
             if (DistToWaypoint <= ArrivalRadius)
@@ -1043,34 +1047,20 @@ namespace ShaiyaOverlay
         }
         else
         {
-            // Advance to next waypoint if physically passed, very close, or within corridor with clear line of sight
-            Vector3 PrevPt = (CurrentWaypointIndex == 0) ? PathStartPos : Waypoints[CurrentWaypointIndex - 1];
-            F32 SegX = CurrentTarget.X - PrevPt.X;
-            F32 SegZ = CurrentTarget.Z - PrevPt.Z;
-            F32 DotPast = (CurPos.X - CurrentTarget.X) * SegX + (CurPos.Z - CurrentTarget.Z) * SegZ;
-
             Vector3 NextWp = Waypoints[CurrentWaypointIndex + 1];
             bool hasLosToNext = CheckLineOfSight(CurPos, NextWp);
 
-            // During detour lock (first 3.0s after stuck recovery), do not cut corners early!
-            bool isDetourLocked = (Now - DetourLockTick < 3000);
-
-            bool canAdvance = false;
-            if (!isDetourLocked && hasLosToNext)
+            if (hasLosToNext)
             {
-                // Next waypoint is unobstructed: can smoothly round or cut the corner
-                if (DistToWaypoint <= 2.2f || (DotPast > 0.0f && DistToWaypoint <= 4.0f))
-                {
+                // Unobstructed corridor: advance if within 3.5m or passed the waypoint
+                if (DistToWaypoint <= 3.5f || DotPast > 0.0f)
                     canAdvance = true;
-                }
             }
             else
             {
-                // Blocked or detour locked: advance if past plane OR within 1.2m of waypoint
-                if (DotPast > 0.0f || DistToWaypoint <= 1.2f)
-                {
+                // Obstructed/corner: advance if within 1.5m or passed the waypoint
+                if (DistToWaypoint <= 1.5f || DotPast > 0.0f)
                     canAdvance = true;
-                }
             }
 
             if (canAdvance)
@@ -1143,5 +1133,56 @@ namespace ShaiyaOverlay
             PostMessageA(Hwnd, WM_KEYDOWN, 'W', 1 | (0x11 << 16));
             KeyIsDown = true;
         }
+    }
+
+    void NavigationManager::OrientCameraTowards(const Vector3& Target)
+    {
+        U64 LocalPlayerPtr = 0;
+        if (!Offsets.WorldManager || !Memory::ReadSafe(Offsets.WorldManager + Offsets.LocalPlayerPtrOffset, &LocalPlayerPtr) || !LocalPlayerPtr)
+            return;
+
+        Vector3 CurPos = { 0 };
+        Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosX, &CurPos.X);
+        Memory::ReadSafe(LocalPlayerPtr + Offsets.PlayerPosZ, &CurPos.Z);
+
+        F32 Dx = Target.X - CurPos.X;
+        F32 Dz = Target.Z - CurPos.Z;
+        F32 Dist = Vector3::Sqrt(Dx * Dx + Dz * Dz);
+        if (Dist < 0.01f) Dist = 0.01f;
+
+        F32 DirX = Dx / Dist;
+        F32 DirZ = Dz / Dist;
+
+        if (Offsets.CameraEye)
+        {
+            F32 LookX = 0.0f;
+            F32 LookY = 0.0f;
+            F32 LookZ = 0.0f;
+            Memory::ReadSafe(Offsets.CameraEye + 0x0C, &LookX);
+            Memory::ReadSafe(Offsets.CameraEye + 0x10, &LookY);
+            Memory::ReadSafe(Offsets.CameraEye + 0x14, &LookZ);
+
+            F32 CamDist = 5.0f;
+            F32 EyeX = LookX - CamDist * DirX;
+            F32 EyeZ = LookZ - CamDist * DirZ;
+
+            *reinterpret_cast<F32*>(Offsets.CameraEye) = EyeX;
+            *reinterpret_cast<F32*>(Offsets.CameraEye + 0x08) = EyeZ;
+
+            if (Offsets.ProjMatrix)
+            {
+                U64 CamEye2 = Offsets.ProjMatrix + Offsets.CameraSecondaryEyeOffset;
+                *reinterpret_cast<F32*>(CamEye2) = EyeX;
+                *reinterpret_cast<F32*>(CamEye2 + 0x08) = EyeZ;
+            }
+        }
+
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirX) = DirX;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirY) = 0.0f;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerDirZ) = DirZ;
+
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirX) = DirX;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirY) = 0.0f;
+        *reinterpret_cast<F32*>(LocalPlayerPtr + Offsets.PlayerMoveDirZ) = DirZ;
     }
 }

@@ -41,7 +41,7 @@ namespace ShaiyaOverlay
         GetCurrentDirectoryA(MAX_PATH, IniPath);
         strcat_s(IniPath, "\\grind_bot.ini");
 
-        Config.Enabled = GetPrivateProfileIntA("GrindBot", "Enabled", 0, IniPath) != 0;
+        Config.Enabled = false; // Always start disabled on load/session start
         Config.QuestMonstersOnly = GetPrivateProfileIntA("GrindBot", "QuestMonstersOnly", 0, IniPath) != 0;
 
         char Buf[64];
@@ -54,16 +54,9 @@ namespace ShaiyaOverlay
         GetPrivateProfileStringA("GrindBot", "RestHpThresholdPercent", "35.0", Buf, sizeof(Buf), IniPath);
         Config.RestHpThresholdPercent = static_cast<F32>(atof(Buf));
 
-        Config.HasAnchor = GetPrivateProfileIntA("GrindBot", "HasAnchor", 0, IniPath) != 0;
-        if (Config.HasAnchor)
-        {
-            GetPrivateProfileStringA("GrindBot", "AnchorX", "0.0", Buf, sizeof(Buf), IniPath);
-            Config.AnchorPosition.X = static_cast<F32>(atof(Buf));
-            GetPrivateProfileStringA("GrindBot", "AnchorY", "0.0", Buf, sizeof(Buf), IniPath);
-            Config.AnchorPosition.Y = static_cast<F32>(atof(Buf));
-            GetPrivateProfileStringA("GrindBot", "AnchorZ", "0.0", Buf, sizeof(Buf), IniPath);
-            Config.AnchorPosition.Z = static_cast<F32>(atof(Buf));
-        }
+        // Anchor is session-only to prevent running to old coordinates
+        Config.HasAnchor = false;
+        Config.AnchorPosition = { 0 };
 
         ConfigLoaded = true;
     }
@@ -87,16 +80,11 @@ namespace ShaiyaOverlay
         sprintf_s(Buf, "%.1f", Config.RestHpThresholdPercent);
         WritePrivateProfileStringA("GrindBot", "RestHpThresholdPercent", Buf, IniPath);
 
-        WritePrivateProfileStringA("GrindBot", "HasAnchor", Config.HasAnchor ? "1" : "0", IniPath);
-        if (Config.HasAnchor)
-        {
-            sprintf_s(Buf, "%.2f", Config.AnchorPosition.X);
-            WritePrivateProfileStringA("GrindBot", "AnchorX", Buf, IniPath);
-            sprintf_s(Buf, "%.2f", Config.AnchorPosition.Y);
-            WritePrivateProfileStringA("GrindBot", "AnchorY", Buf, IniPath);
-            sprintf_s(Buf, "%.2f", Config.AnchorPosition.Z);
-            WritePrivateProfileStringA("GrindBot", "AnchorZ", Buf, IniPath);
-        }
+        // Remove old anchor keys from INI if present
+        WritePrivateProfileStringA("GrindBot", "HasAnchor", nullptr, IniPath);
+        WritePrivateProfileStringA("GrindBot", "AnchorX", nullptr, IniPath);
+        WritePrivateProfileStringA("GrindBot", "AnchorY", nullptr, IniPath);
+        WritePrivateProfileStringA("GrindBot", "AnchorZ", nullptr, IniPath);
     }
 
     void GrindBot::SetAnchor(const Vector3& Pos)
@@ -180,6 +168,7 @@ namespace ShaiyaOverlay
         {
             CurrentTargetWorldId = bestWorldId;
             SkillManager::SetTarget(bestWorldId);
+            Logger::Info("GrindBot: Acquired target mob WorldId=%u (dist=%.1fm)", bestWorldId, bestDist);
             return true;
         }
 
@@ -195,6 +184,17 @@ namespace ShaiyaOverlay
         {
             State = GrindBotState::Idle;
             return;
+        }
+
+        if (State == GrindBotState::Idle)
+        {
+            const auto& player = EntityManager::GetLocalPlayer();
+            if (player.Valid && !Config.HasAnchor)
+            {
+                SetAnchor(player.Position);
+            }
+            State = GrindBotState::SearchingTarget;
+            Logger::Info("GrindBot: Auto-starting state machine from Idle -> SearchingTarget");
         }
 
         const auto& player = EntityManager::GetLocalPlayer();
@@ -271,6 +271,9 @@ namespace ShaiyaOverlay
             if (!targetMob)
             {
                 // Target lost or despawned
+                if (NavigationManager::IsNavigating())
+                    NavigationManager::Stop();
+                CurrentTargetWorldId = 0;
                 State = GrindBotState::SearchingTarget;
                 break;
             }
@@ -286,12 +289,15 @@ namespace ShaiyaOverlay
                 ComboManager::SetActive(true);
                 State = GrindBotState::Combat;
                 LastStateTick = now;
+                Logger::Info("GrindBot: In combat range (%.1fm <= %.1fm). Engaging combat!", dist, Config.CombatApproachDistance);
             }
             else
             {
-                if (!NavigationManager::IsNavigating() && (now - LastStateTick > 1000))
+                // Target is beyond combat approach distance: follow it
+                if (!NavigationManager::IsNavigating() || (now - LastStateTick > 1200))
                 {
-                    NavigationManager::WalkTo(targetMob->Position, targetMob->Name, Config.CombatApproachDistance - 2.0f);
+                    F32 approachStop = Config.CombatApproachDistance > 3.0f ? (Config.CombatApproachDistance - 2.0f) : 2.0f;
+                    NavigationManager::WalkTo(targetMob->Position, targetMob->Name, approachStop);
                     LastStateTick = now;
                 }
             }
@@ -301,22 +307,23 @@ namespace ShaiyaOverlay
         case GrindBotState::Combat:
         {
             const auto& monsters = EntityManager::GetNearbyMonsters();
-            bool targetAlive = false;
+            const MonsterEntity* targetMob = nullptr;
             for (U32 i = 0; i < monsters.GetCount(); ++i)
             {
                 if (monsters[i].WorldId == CurrentTargetWorldId && monsters[i].Alive)
                 {
-                    targetAlive = true;
+                    targetMob = &monsters[i];
                     break;
                 }
             }
 
-            if (!targetAlive)
+            if (!targetMob)
             {
-                // Monster killed!
+                // Monster killed or disappeared!
                 Stats.MonstersKilled++;
                 ComboManager::SetActive(false);
                 CurrentTargetWorldId = 0;
+                Logger::Info("GrindBot: Mob eliminated! Total kills: %u", Stats.MonstersKilled);
 
                 // Check for ground loot within pickup distance
                 if (GroundItemManager::GetItemCount() > 0)
@@ -328,6 +335,24 @@ namespace ShaiyaOverlay
                 {
                     State = GrindBotState::SearchingTarget;
                 }
+                break;
+            }
+
+            // Target is alive: ensure target selection is locked and combo stays active
+            SkillManager::SetTarget(CurrentTargetWorldId);
+            ComboManager::SetActive(true);
+
+            // Turn player toward target monster so spells cast properly
+            NavigationManager::OrientCameraTowards(targetMob->Position);
+
+            // If target moved out of combat range, re-approach it
+            F32 dist = player.Position.DistanceTo(targetMob->Position);
+            if (dist > Config.CombatApproachDistance + 4.0f)
+            {
+                ComboManager::SetActive(false);
+                State = GrindBotState::Approaching;
+                LastStateTick = now;
+                Logger::Info("GrindBot: Mob moved out of combat range (%.1fm). Re-approaching...", dist);
             }
             break;
         }

@@ -20,6 +20,7 @@ namespace ShaiyaOverlay
         static bool CheckWalkableClearance(const Vector3& Start, const Vector3& End, F32 Radius = 0.70f);
         static bool IsSegmentWalkable(const Vector3& Start, const Vector3& End);
         static F32 GetGroundHeight(F32 X, F32 Z);
+        static void OrientCameraTowards(const Vector3& Target);
 
         // Path generation
         static U32 BuildPath(const Vector3& Start, const Vector3& Goal, Vector3* OutWaypoints, U32 MaxWaypoints);

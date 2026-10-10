@@ -280,23 +280,15 @@ namespace ShaiyaOverlay
                         {
                             if (!SkillManager::HasAliveTarget())
                             {
-                                if (Config.AutoTargetNext)
+                                U32 NextMobId = FindNextMonsterTarget();
+                                if (NextMobId != 0)
                                 {
-                                    U32 NextMobId = FindNextMonsterTarget();
-                                    if (NextMobId != 0)
-                                    {
-                                        SkillManager::SetTarget(NextMobId);
-                                        Logger::Info("AutoCombo: Auto-targeted next mob (WorldId: %u)", NextMobId);
-                                    }
-                                    else
-                                    {
-                                        return false; // No valid alive mob in range matching filter
-                                    }
+                                    SkillManager::SetTarget(NextMobId);
+                                    Logger::Info("AutoCombo: Auto-targeted next mob (WorldId: %u)", NextMobId);
                                 }
                                 else
                                 {
-                                    // Standalone mode: wait for manual target
-                                    return false;
+                                    return false; // No valid alive mob in range
                                 }
                             }
                         }

@@ -7,16 +7,20 @@
 #define NOMINMAX
 #endif
 #include "Config/Settings.h"
+#include "Core/Types.h"
 #include "Game/Combat/ComboManager.h"
 #include "Game/Bot/GrindBot.h"
 #include "Game/Skills/SkillManager.h"
 #include "Game/Entities/EntityManager.h"
+#include "Game/Navigation/NavigationManager.h"
 #include <Windows.h>
 
 #include <stdio.h>
 #include <math.h>
+#include <vector>
 
 using namespace Blade;
+using namespace ShaiyaOverlay;
 
 static float ACardPadding()
 {
@@ -153,7 +157,16 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
             const float text_x = white_label ? L.x + pad : L.x + 42.0f;
             TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Grind Bot Engine")).y * 0.5f), C.text, pstra("Grind Bot Engine"));
             const float checkbox_offset = IsWhiteLabel() ? 25.0f : 26.0f;
-            Checkbox(pstra("##bot_en"), ImVec2(L.x + L.w - checkbox_offset, cy), &botCfg.Enabled, 22.0f);
+            bool wasEnabled = botCfg.Enabled;
+            if (Checkbox(pstra("##bot_en"), ImVec2(L.x + L.w - checkbox_offset, cy), &botCfg.Enabled, 22.0f))
+            {
+                if (botCfg.Enabled != wasEnabled)
+                {
+                    // Restore wasEnabled and use ToggleActive() to properly trigger State initialization
+                    botCfg.Enabled = wasEnabled;
+                    ShaiyaOverlay::GrindBot::ToggleActive();
+                }
+            }
             PopAlpha();
         }
         {
@@ -217,7 +230,7 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
     {
         ACard R; R.dl = dl; R.x = cx0 + pad + col_w + gap; R.y = base_y; R.w = col_w;
         int stepCount = (int)seq.GetCount();
-        int totalRows = 2 + (stepCount > 0 ? (stepCount > 6 ? 6 : stepCount) : 1);
+        int totalRows = 2 + (stepCount > 0 ? stepCount : 1);
         R.Begin(totalRows);
         {
             float cy = R.Row(HDR);
@@ -232,20 +245,59 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         if (stepCount == 0)
         {
             float cy = R.Row(ROW);
-            TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, pstra("No skills in sequence.")).y * 0.5f), C.text_mute, pstra("No skills in sequence."));
+            TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, pstra("No skills in sequence.")).y * 0.5f), C.text_mute, pstra("No skills in sequence. Add below."));
         }
         else
         {
-            for (int s = 0; s < stepCount && s < 6; s++)
+            for (int s = 0; s < stepCount; s++)
             {
                 float cy = R.Row(38.0f);
+                const float cp = ACardPadding();
+                float right = R.x + R.w - cp;
+
+                // Buttons: [X] (Del) | [v] (Down) | [^] (Up)
+                float btn_w = 22.0f, btn_h = 22.0f, gap_b = 4.0f;
+
+                ImVec2 bDel_max(right, cy + btn_h * 0.5f);
+                ImVec2 bDel_min(bDel_max.x - btn_w, cy - btn_h * 0.5f);
+                char delId[32]; snprintf(delId, sizeof(delId), pstra("##del_s_%d"), s);
+
+                ImVec2 bDn_max(bDel_min.x - gap_b, bDel_max.y);
+                ImVec2 bDn_min(bDn_max.x - btn_w, bDel_min.y);
+                char dnId[32]; snprintf(dnId, sizeof(dnId), pstra("##dn_s_%d"), s);
+
+                ImVec2 bUp_max(bDn_min.x - gap_b, bDel_max.y);
+                ImVec2 bUp_min(bUp_max.x - btn_w, bDel_min.y);
+                char upId[32]; snprintf(upId, sizeof(upId), pstra("##up_s_%d"), s);
+
+                // Label
                 char stepStr[64];
                 snprintf(stepStr, sizeof(stepStr), pstra("#%d %s"), s + 1, seq[s].Name);
-                TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, stepStr).y * 0.5f), C.text, stepStr);
+                char dispBuf[64];
+                float max_label_w = bUp_min.x - R.x - cp - 8.0f;
+                const char* shown = FitEllipsis(F_Body, stepStr, max_label_w, dispBuf, sizeof(dispBuf));
+                TextAt(dl, F_Body, ImVec2(R.x + cp, cy - Measure(F_Body, shown).y * 0.5f), C.text, shown);
 
-                char delayStr[24];
-                snprintf(delayStr, sizeof(delayStr), pstra("ID %u"), seq[s].SkillId);
-                TextRight(dl, F_Small, ImVec2(R.x + R.w - ACardPadding(), cy - Measure(F_Small, delayStr).y * 0.5f), C.text_dim, delayStr);
+                PushAlpha(R.a);
+                if (s > 0 && Button(upId, bUp_min, bUp_max, pstra("^"), false))
+                {
+                    ShaiyaOverlay::ComboManager::MoveSkillUp(s);
+                    PopAlpha();
+                    break;
+                }
+                if (s + 1 < stepCount && Button(dnId, bDn_min, bDn_max, pstra("v"), false))
+                {
+                    ShaiyaOverlay::ComboManager::MoveSkillDown(s);
+                    PopAlpha();
+                    break;
+                }
+                if (Button(delId, bDel_min, bDel_max, pstra("X"), false))
+                {
+                    ShaiyaOverlay::ComboManager::RemoveSkillFromSequence(s);
+                    PopAlpha();
+                    break;
+                }
+                PopAlpha();
             }
         }
 
@@ -256,12 +308,14 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
             float btn_w = (R.w - ACardPadding() * 2.0f - 8.0f) * 0.5f;
             ImVec2 b1_min(R.x + ACardPadding(), rmin.y + 6.0f);
             ImVec2 b1_max(b1_min.x + btn_w, rmin.y + ROW - 6.0f);
-            if (Button(pstra("##btn_auto_add"), b1_min, b1_max, pstra("Auto Add Skills"), true))
+            if (Button(pstra("##btn_auto_add"), b1_min, b1_max, pstra("Auto Add All"), true))
             {
                 const auto& skills = ShaiyaOverlay::SkillManager::GetSkills();
                 for (unsigned int i = 0; i < skills.GetCount(); i++)
                 {
-                    if (skills[i].IsLearned && !skills[i].IsPassive && skills[i].SkillId > 0)
+                    // Only add offensive/combat skills targeting monsters (TargetType == 3 or offensive area/single)
+                    if (skills[i].IsLearned && !skills[i].IsPassive && skills[i].SkillId > 0 &&
+                        skills[i].TargetType != 0 && skills[i].TargetType != 2 && skills[i].TargetType != 8)
                     {
                         ShaiyaOverlay::ComboManager::AddSkillToSequence(skills[i].SkillId, skills[i].Name);
                     }
@@ -273,6 +327,68 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
             if (Button(pstra("##btn_clear_seq"), b2_min, b2_max, pstra("Clear Rotation"), false))
             {
                 ShaiyaOverlay::ComboManager::ClearSequence();
+            }
+        }
+
+        // Add Individual Learned Skills Card (Offensive skills only, filter out self buffs)
+        const auto& allSkills = ShaiyaOverlay::SkillManager::GetSkills();
+        std::vector<const ShaiyaOverlay::SkillInfo*> availableSkills;
+        for (U32 i = 0; i < allSkills.GetCount(); ++i)
+        {
+            if (allSkills[i].IsLearned && !allSkills[i].IsPassive && allSkills[i].SkillId > 0 &&
+                allSkills[i].TargetType != 0 && allSkills[i].TargetType != 2 && allSkills[i].TargetType != 8)
+            {
+                availableSkills.push_back(&allSkills[i]);
+            }
+        }
+
+        R.y += gap;
+        int addCardRows = 1 + (availableSkills.empty() ? 1 : (int)availableSkills.size());
+        R.Begin(addCardRows);
+        {
+            float cy = R.Row(HDR);
+            PushAlpha(R.a);
+            if (!white_label)
+                DrawIcon(dl, IC_PLUS, ImVec2(R.x + 26.0f, cy), 15.0f, Accent(1.0f), 1.5f);
+            const float text_x = white_label ? R.x + pad : R.x + 42.0f;
+            TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Add Learned Skills")).y * 0.5f), C.text, pstra("Add Learned Skills"));
+            PopAlpha();
+        }
+
+        if (availableSkills.empty())
+        {
+            float cy = R.Row(ROW);
+            TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, pstra("No active skills learned yet.")).y * 0.5f), C.text_mute, pstra("No active skills learned yet."));
+        }
+        else
+        {
+            for (size_t i = 0; i < availableSkills.size(); ++i)
+            {
+                const auto& skl = *availableSkills[i];
+                float cy = R.Row(36.0f);
+                const float cp = ACardPadding();
+                float right = R.x + R.w - cp;
+
+                float add_w = 54.0f, add_h = 22.0f;
+                ImVec2 bAdd_max(right, cy + add_h * 0.5f);
+                ImVec2 bAdd_min(bAdd_max.x - add_w, cy - add_h * 0.5f);
+
+                char skLabel[64];
+                snprintf(skLabel, sizeof(skLabel), pstra("%s (Lv.%u)"), skl.Name, skl.Level);
+                char dispBuf[64];
+                float max_label_w = bAdd_min.x - R.x - cp - 8.0f;
+                const char* shown = FitEllipsis(F_Body, skLabel, max_label_w, dispBuf, sizeof(dispBuf));
+                TextAt(dl, F_Body, ImVec2(R.x + cp, cy - Measure(F_Body, shown).y * 0.5f), C.text, shown);
+
+                char addBtnId[32]; snprintf(addBtnId, sizeof(addBtnId), pstra("##add_sk_%zu"), i);
+                PushAlpha(R.a);
+                if (Button(addBtnId, bAdd_min, bAdd_max, pstra("+ Add"), false))
+                {
+                    ShaiyaOverlay::ComboManager::AddSkillToSequence(skl.SkillId, skl.Name);
+                    PopAlpha();
+                    break;
+                }
+                PopAlpha();
             }
         }
 

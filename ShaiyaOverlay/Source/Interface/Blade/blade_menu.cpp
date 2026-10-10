@@ -1806,9 +1806,8 @@ static void DrawSettingsContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
         RowSlider(L, pstra("UI scale"), pstra("##df_uiscale"), &settings.Interface.UiScale, 0.7f, 1.8f, pstra("%.2fx"));
         RowSlider(L, pstra("Animation speed"), pstra("##df_anim"), &settings.Interface.AnimationSpeed, 0.1f, 3.0f, pstra("%.2fx"));
 
-        R.Section(pstra("HUD Panels"), 4);
+        R.Section(pstra("HUD Panels"), 3);
         RowToggle(R, pstra("Watermark HUD"), pstra("##df_hud_wm"), &S.hud_watermark, false);
-        RowToggle(R, pstra("Target HUD"), pstra("##df_hud_target"), &S.hud_target, false);
         RowToggle(R, pstra("Coordinates HUD"), pstra("##df_hud_coords"), &S.hud_coords, false);
         RowToggle(R, pstra("Notifications"), pstra("##df_hud_notify"), &S.hud_notify, false);
 

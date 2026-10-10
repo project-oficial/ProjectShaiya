@@ -48,11 +48,10 @@ namespace ShaiyaOverlay
         static void ClearAnchor();
         static void ResetStats();
         static void ToggleActive();
-
-    private:
         static void LoadConfig();
         static void SaveConfig();
 
+    private:
         static bool SelectNextTarget();
 
         static GrindBotConfig Config;
