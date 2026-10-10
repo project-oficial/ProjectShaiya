@@ -45,8 +45,8 @@ static ImU32 ColorU32(const ImColor& color, float alpha = 1.0f)
 
 struct SearchItem { ProtectedText name; int tab; int module; };
 static const SearchItem kSearch[] = {
-    { pstra("Auto-Combo"), 0, 0 }, { pstra("Combat range"), 0, 0 }, { pstra("Target switch"), 0, 0 },
-    { pstra("Grind Bot"), 0, 1 }, { pstra("Roam radius"), 0, 1 }, { pstra("Anchor position"), 0, 1 },
+    { pstra("Grind Bot"), 0, 0 }, { pstra("Combat range"), 0, 0 }, { pstra("Skill rotation"), 0, 0 },
+    { pstra("Leash radius"), 0, 0 }, { pstra("Anchor position"), 0, 0 }, { pstra("Cast delay"), 0, 0 },
     { pstra("Monster ESP"), 1, 0 }, { pstra("Monster distance"), 1, 0 }, { pstra("NPC ESP"), 1, 0 },
     { pstra("Loot ESP"), 1, 1 }, { pstra("Loot snaplines"), 1, 1 }, { pstra("Quest markers"), 1, 2 },
     { pstra("Auto-Loot"), 2, 0 }, { pstra("Loot radius"), 2, 0 }, { pstra("Filter items"), 2, 0 },

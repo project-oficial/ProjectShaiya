@@ -5,6 +5,7 @@
 #include "Game/GameOffsets.h"
 #include "Game/Entities/EntityManager.h"
 #include "Game/Skills/SkillManager.h"
+#include "Game/Bot/GrindBot.h"
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -355,31 +356,13 @@ namespace ShaiyaOverlay
             }
         }
 
-        if (!Config.Enabled)
+        // Combo execution is strictly bound to Grind Bot combat
+        if (!GrindBot::GetConfig().Enabled || !Config.Active)
         {
             Config.Active = false;
             return;
         }
 
-        // Fallback polling for HoldKeyMode when game is foreground
-        HWND fg = GetForegroundWindow();
-        if (fg && (Offsets.GameHwnd ? (fg == reinterpret_cast<HWND>(*reinterpret_cast<U64*>(Offsets.GameHwnd))) : true))
-        {
-            if (Config.HoldKeyMode)
-            {
-                bool isDown = ((GetAsyncKeyState(Config.Hotkey) & 0x8000) != 0);
-                if (isDown != Config.Active)
-                {
-                    Config.Active = isDown;
-                    if (isDown)
-                        CurrentIndex = 0;
-                }
-            }
-        }
-
-        if (Config.Active)
-        {
-            ExecuteNextSkill();
-        }
+        ExecuteNextSkill();
     }
 }

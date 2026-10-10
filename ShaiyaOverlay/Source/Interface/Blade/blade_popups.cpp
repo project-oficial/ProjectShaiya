@@ -42,7 +42,6 @@ const Blade::ItemDef Blade::kItems[] = {
 const int Blade::kItemCount = IM_ARRAYSIZE(kItems);
 
 static const Module kCombat[] = {
-    { pstra("Auto-Combo"), nullptr, 0 },
     { pstra("Grind Bot"), nullptr, 0 },
 };
 static const Module kVisuals[] = {

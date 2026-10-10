@@ -162,11 +162,6 @@ namespace ShaiyaOverlay
                 InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
             }
-
-            if (!MenuOpen && WParam == ComboManager::GetConfig().Hotkey && !(LParam & (1 << 30)))
-            {
-                ComboManager::HandleHotkeyState(true);
-            }
         }
         else if (Msg == WM_KEYUP)
         {
@@ -189,11 +184,6 @@ namespace ShaiyaOverlay
                 Logger::Info("WndProcHook: Unload requested via END.");
                 InterlockedDecrement(&ActiveWndProcCalls);
                 return 0;
-            }
-
-            if (!MenuOpen && WParam == ComboManager::GetConfig().Hotkey)
-            {
-                ComboManager::HandleHotkeyState(false);
             }
         }
 

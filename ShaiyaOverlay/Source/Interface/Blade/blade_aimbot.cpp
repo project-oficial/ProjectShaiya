@@ -136,188 +136,159 @@ void Blade::DrawAimbotContent(ImDrawList* dl, ImVec2 min, ImVec2 max,
 
     const float HDR = 46.0f, ROW = 46.0f;
 
-    int selected_module = S.module_sel[0];
+    auto& botCfg = ShaiyaOverlay::GrindBot::GetConfig();
+    auto& comboCfg = ShaiyaOverlay::ComboManager::GetConfig();
+    const auto& seq = ShaiyaOverlay::ComboManager::GetComboSequence();
+    const char* botState = ShaiyaOverlay::GrindBot::GetStateName();
 
-    if (selected_module == 0) // Auto-Combo
+    // Left Column: Bot Engine & Configuration
     {
-        auto& comboCfg = ShaiyaOverlay::ComboManager::GetConfig();
-        const auto& seq = ShaiyaOverlay::ComboManager::GetComboSequence();
-
-        // Left Column: Configuration
+        ACard L; L.dl = dl; L.x = cx0 + pad; L.y = base_y; L.w = col_w;
+        L.Begin(5);
         {
-            ACard L; L.dl = dl; L.x = cx0 + pad; L.y = base_y; L.w = col_w;
-            L.Begin(5);
+            float cy = L.Row(HDR);
+            PushAlpha(L.a);
+            if (!white_label)
+                DrawIcon(dl, IC_BOLT, ImVec2(L.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
+            const float text_x = white_label ? L.x + pad : L.x + 42.0f;
+            TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Grind Bot Engine")).y * 0.5f), C.text, pstra("Grind Bot Engine"));
+            const float checkbox_offset = IsWhiteLabel() ? 25.0f : 26.0f;
+            Checkbox(pstra("##bot_en"), ImVec2(L.x + L.w - checkbox_offset, cy), &botCfg.Enabled, 22.0f);
+            PopAlpha();
+        }
+        {
+            float cy = L.Row(ROW);
+            RowLabel(dl, L.x, L.w, cy, pstra("Engine State"), L.a, pstra("Current automaton state"));
+            TextRight(dl, F_Body, ImVec2(L.x + L.w - ACardPadding(), cy - Measure(F_Body, botState).y * 0.5f), Accent(1.0f), botState);
+        }
+        CardSlider(L, pstra("Leash Radius"), pstra("##bot_roam"), &botCfg.LeashRadius, 5.0f, 150.0f, pstra("%.0f m"));
+        CardSlider(L, pstra("Combat Range"), pstra("##bot_stop"), &botCfg.CombatApproachDistance, 1.0f, 25.0f, pstra("%.1f m"));
+        {
+            ImVec2 rmin;
+            float cy = L.Row(ROW, &rmin);
+            ImVec2 bmin(L.x + ACardPadding(), rmin.y + 6.0f);
+            ImVec2 bmax(L.x + L.w - ACardPadding(), rmin.y + ROW - 6.0f);
+            if (Button(pstra("##btn_set_anchor"), bmin, bmax, botCfg.HasAnchor ? pstra("Anchor Set (Click to Reset)") : pstra("Set Current Pos as Anchor"), true))
             {
-                float cy = L.Row(HDR);
-                PushAlpha(L.a);
-                if (!white_label)
-                    DrawIcon(dl, IC_BOLT, ImVec2(L.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
-                const float text_x = white_label ? L.x + pad : L.x + 42.0f;
-                TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Auto-Combo Engine")).y * 0.5f), C.text, pstra("Auto-Combo Engine"));
-                const float checkbox_offset = IsWhiteLabel() ? 25.0f : 26.0f;
-                Checkbox(pstra("##combo_en"), ImVec2(L.x + L.w - checkbox_offset, cy), &comboCfg.Enabled, 22.0f);
-                PopAlpha();
+                const auto& player = ShaiyaOverlay::EntityManager::GetLocalPlayer();
+                if (player.Valid)
+                {
+                    ShaiyaOverlay::GrindBot::SetAnchor(player.Position);
+                    Blade::PushNotification(pstra("Anchor position saved!"), NT_SUCCESS);
+                }
             }
-            RowToggle(L, pstra("Target Auto-Switch"), pstra("##combo_switch"), &comboCfg.AutoTargetNext, pstra("Troca de alvo automatico"));
-            {
-                bool questOnly = (comboCfg.TargetFilter == ShaiyaOverlay::TargetFilterMode::QuestMonstersOnly);
-                bool oldQuest = questOnly;
-                RowToggle(L, pstra("Prioritize Quest Mobs"), pstra("##combo_quest"), &questOnly, pstra("Prioriza monstros de missoes"));
-                if (questOnly != oldQuest)
-                    comboCfg.TargetFilter = questOnly ? ShaiyaOverlay::TargetFilterMode::QuestMonstersOnly : ShaiyaOverlay::TargetFilterMode::AllMonsters;
-            }
-            CardSlider(L, pstra("Attack Distance"), pstra("##combo_dist"), &comboCfg.MaxTargetRange, 1.0f, 30.0f, pstra("%.1f m"));
-
-            int hk = (int)comboCfg.Hotkey;
-            RowHotkey(L, pstra("Combo Hotkey"), pstra("##combo_hk"), &hk);
-            comboCfg.Hotkey = (ShaiyaOverlay::U32)hk;
-
-            L.y += gap;
-            L.Begin(1);
-            float cd = (float)comboCfg.CastDelayMs;
-            CardSlider(L, pstra("Cast Delay"), pstra("##combo_delay"), &cd, 200.0f, 3000.0f, pstra("%.0f ms"));
-            comboCfg.CastDelayMs = (ShaiyaOverlay::U32)cd;
-
-            content_h = L.y - base_y;
         }
 
-        // Right Column: Skill Sequence
+        L.y += gap;
+        L.Begin(3);
         {
-            ACard R; R.dl = dl; R.x = cx0 + pad + col_w + gap; R.y = base_y; R.w = col_w;
-            int stepCount = (int)seq.GetCount();
-            int totalRows = 2 + (stepCount > 0 ? (stepCount > 6 ? 6 : stepCount) : 1);
-            R.Begin(totalRows);
-            {
-                float cy = R.Row(HDR);
-                PushAlpha(R.a);
-                if (!white_label)
-                    DrawIcon(dl, IC_SWORD, ImVec2(R.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
-                const float text_x = white_label ? R.x + pad : R.x + 42.0f;
-                TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Rotation Sequence")).y * 0.5f), C.text, pstra("Rotation Sequence"));
-                PopAlpha();
-            }
-
-            if (stepCount == 0)
-            {
-                float cy = R.Row(ROW);
-                TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, pstra("No skills in sequence.")).y * 0.5f), C.text_mute, pstra("No skills in sequence."));
-            }
-            else
-            {
-                for (int s = 0; s < stepCount && s < 6; s++)
-                {
-                    float cy = R.Row(38.0f);
-                    char stepStr[64];
-                    snprintf(stepStr, sizeof(stepStr), pstra("#%d %s"), s + 1, seq[s].Name);
-                    TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, stepStr).y * 0.5f), C.text, stepStr);
-
-                    char delayStr[24];
-                    snprintf(delayStr, sizeof(delayStr), pstra("ID %u"), seq[s].SkillId);
-                    TextRight(dl, F_Small, ImVec2(R.x + R.w - ACardPadding(), cy - Measure(F_Small, delayStr).y * 0.5f), C.text_dim, delayStr);
-                }
-            }
-
-            // Quick add / clear action row
-            {
-                ImVec2 rmin;
-                float cy = R.Row(ROW, &rmin);
-                float btn_w = (R.w - ACardPadding() * 2.0f - 8.0f) * 0.5f;
-                ImVec2 b1_min(R.x + ACardPadding(), rmin.y + 6.0f);
-                ImVec2 b1_max(b1_min.x + btn_w, rmin.y + ROW - 6.0f);
-                if (Button(pstra("##btn_auto_add"), b1_min, b1_max, pstra("Auto Add Skills"), true))
-                {
-                    const auto& skills = ShaiyaOverlay::SkillManager::GetSkills();
-                    for (unsigned int i = 0; i < skills.GetCount(); i++)
-                    {
-                        if (skills[i].IsLearned && !skills[i].IsPassive && skills[i].SkillId > 0)
-                        {
-                            ShaiyaOverlay::ComboManager::AddSkillToSequence(skills[i].SkillId, skills[i].Name);
-                        }
-                    }
-                }
-
-                ImVec2 b2_min(b1_max.x + 8.0f, rmin.y + 6.0f);
-                ImVec2 b2_max(b2_min.x + btn_w, rmin.y + ROW - 6.0f);
-                if (Button(pstra("##btn_clear_seq"), b2_min, b2_max, pstra("Clear Rotation"), false))
-                {
-                    ShaiyaOverlay::ComboManager::ClearSequence();
-                }
-            }
-
-            content_h = ImMax(content_h, R.y - base_y);
+            float cy = L.Row(HDR);
+            PushAlpha(L.a);
+            if (!white_label)
+                DrawIcon(dl, IC_HELMET, ImVec2(L.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
+            const float text_x = white_label ? L.x + pad : L.x + 42.0f;
+            TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Targeting & Safety")).y * 0.5f), C.text, pstra("Targeting & Safety"));
+            PopAlpha();
         }
+        RowToggle(L, pstra("Quest Mobs Only"), pstra("##bot_questonly"), &botCfg.QuestMonstersOnly, pstra("Only engage quest monsters"));
+        CardSlider(L, pstra("Rest HP %"), pstra("##bot_rest_hp"), &botCfg.RestHpThresholdPercent, 10.0f, 80.0f, pstra("%.0f%%"));
+
+        L.y += gap;
+        L.Begin(2);
+        {
+            float cy = L.Row(ROW);
+            char killBuf[48];
+            snprintf(killBuf, sizeof(killBuf), "%u", ShaiyaOverlay::GrindBot::GetStats().MonstersKilled);
+            RowLabel(dl, L.x, L.w, cy, pstra("Monsters Defeated"), L.a);
+            TextRight(dl, F_Body, ImVec2(L.x + L.w - ACardPadding(), cy - Measure(F_Body, killBuf).y * 0.5f), C.text, killBuf);
+        }
+        {
+            float cy = L.Row(ROW);
+            char lootBuf[48];
+            snprintf(lootBuf, sizeof(lootBuf), "%u", ShaiyaOverlay::GrindBot::GetStats().ItemsLooted);
+            RowLabel(dl, L.x, L.w, cy, pstra("Items Looted"), L.a);
+            TextRight(dl, F_Body, ImVec2(L.x + L.w - ACardPadding(), cy - Measure(F_Body, lootBuf).y * 0.5f), C.text, lootBuf);
+        }
+
+        content_h = L.y - base_y;
     }
-    else // Grind Bot
-    {
-        auto& botCfg = ShaiyaOverlay::GrindBot::GetConfig();
-        const char* botState = ShaiyaOverlay::GrindBot::GetStateName();
 
-        // Left Column: Bot Engine & Anchor
+    // Right Column: Combat Skill Rotation
+    {
+        ACard R; R.dl = dl; R.x = cx0 + pad + col_w + gap; R.y = base_y; R.w = col_w;
+        int stepCount = (int)seq.GetCount();
+        int totalRows = 2 + (stepCount > 0 ? (stepCount > 6 ? 6 : stepCount) : 1);
+        R.Begin(totalRows);
         {
-            ACard L; L.dl = dl; L.x = cx0 + pad; L.y = base_y; L.w = col_w;
-            L.Begin(5);
+            float cy = R.Row(HDR);
+            PushAlpha(R.a);
+            if (!white_label)
+                DrawIcon(dl, IC_SWORD, ImVec2(R.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
+            const float text_x = white_label ? R.x + pad : R.x + 42.0f;
+            TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Combat Skill Rotation")).y * 0.5f), C.text, pstra("Combat Skill Rotation"));
+            PopAlpha();
+        }
+
+        if (stepCount == 0)
+        {
+            float cy = R.Row(ROW);
+            TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, pstra("No skills in sequence.")).y * 0.5f), C.text_mute, pstra("No skills in sequence."));
+        }
+        else
+        {
+            for (int s = 0; s < stepCount && s < 6; s++)
             {
-                float cy = L.Row(HDR);
-                PushAlpha(L.a);
-                if (!white_label)
-                    DrawIcon(dl, IC_BOLT, ImVec2(L.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
-                const float text_x = white_label ? L.x + pad : L.x + 42.0f;
-                TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Grind Bot Engine")).y * 0.5f), C.text, pstra("Grind Bot Engine"));
-                const float checkbox_offset = IsWhiteLabel() ? 25.0f : 26.0f;
-                Checkbox(pstra("##bot_en"), ImVec2(L.x + L.w - checkbox_offset, cy), &botCfg.Enabled, 22.0f);
-                PopAlpha();
+                float cy = R.Row(38.0f);
+                char stepStr[64];
+                snprintf(stepStr, sizeof(stepStr), pstra("#%d %s"), s + 1, seq[s].Name);
+                TextAt(dl, F_Body, ImVec2(R.x + ACardPadding(), cy - Measure(F_Body, stepStr).y * 0.5f), C.text, stepStr);
+
+                char delayStr[24];
+                snprintf(delayStr, sizeof(delayStr), pstra("ID %u"), seq[s].SkillId);
+                TextRight(dl, F_Small, ImVec2(R.x + R.w - ACardPadding(), cy - Measure(F_Small, delayStr).y * 0.5f), C.text_dim, delayStr);
             }
+        }
+
+        // Quick add / clear action row
+        {
+            ImVec2 rmin;
+            float cy = R.Row(ROW, &rmin);
+            float btn_w = (R.w - ACardPadding() * 2.0f - 8.0f) * 0.5f;
+            ImVec2 b1_min(R.x + ACardPadding(), rmin.y + 6.0f);
+            ImVec2 b1_max(b1_min.x + btn_w, rmin.y + ROW - 6.0f);
+            if (Button(pstra("##btn_auto_add"), b1_min, b1_max, pstra("Auto Add Skills"), true))
             {
-                float cy = L.Row(ROW);
-                RowLabel(dl, L.x, L.w, cy, pstra("Engine State"), L.a, pstra("Estado atual do bot"));
-                TextRight(dl, F_Body, ImVec2(L.x + L.w - ACardPadding(), cy - Measure(F_Body, botState).y * 0.5f), Accent(1.0f), botState);
-            }
-            CardSlider(L, pstra("Leash Radius"), pstra("##bot_roam"), &botCfg.LeashRadius, 5.0f, 150.0f, pstra("%.0f m"));
-            CardSlider(L, pstra("Approach Distance"), pstra("##bot_stop"), &botCfg.CombatApproachDistance, 1.0f, 20.0f, pstra("%.1f m"));
-            {
-                ImVec2 rmin;
-                float cy = L.Row(ROW, &rmin);
-                ImVec2 bmin(L.x + ACardPadding(), rmin.y + 6.0f);
-                ImVec2 bmax(L.x + L.w - ACardPadding(), rmin.y + ROW - 6.0f);
-                if (Button(pstra("##btn_set_anchor"), bmin, bmax, botCfg.HasAnchor ? pstra("Anchor Set (Click to Reset)") : pstra("Set Current Pos as Anchor"), true))
+                const auto& skills = ShaiyaOverlay::SkillManager::GetSkills();
+                for (unsigned int i = 0; i < skills.GetCount(); i++)
                 {
-                    const auto& player = ShaiyaOverlay::EntityManager::GetLocalPlayer();
-                    if (player.Valid)
+                    if (skills[i].IsLearned && !skills[i].IsPassive && skills[i].SkillId > 0)
                     {
-                        ShaiyaOverlay::GrindBot::SetAnchor(player.Position);
-                        Blade::PushNotification(pstra("Anchor position saved!"), NT_SUCCESS);
+                        ShaiyaOverlay::ComboManager::AddSkillToSequence(skills[i].SkillId, skills[i].Name);
                     }
                 }
             }
 
-            content_h = L.y - base_y;
+            ImVec2 b2_min(b1_max.x + 8.0f, rmin.y + 6.0f);
+            ImVec2 b2_max(b2_min.x + btn_w, rmin.y + ROW - 6.0f);
+            if (Button(pstra("##btn_clear_seq"), b2_min, b2_max, pstra("Clear Rotation"), false))
+            {
+                ShaiyaOverlay::ComboManager::ClearSequence();
+            }
         }
 
-        // Right Column: Safety & Rest
+        R.y += gap;
+        R.Begin(2);
+        float cd = (float)comboCfg.CastDelayMs;
+        CardSlider(R, pstra("Cast Delay"), pstra("##combo_delay"), &cd, 200.0f, 3000.0f, pstra("%.0f ms"));
+        comboCfg.CastDelayMs = (ShaiyaOverlay::U32)cd;
+
         {
-            ACard R; R.dl = dl; R.x = cx0 + pad + col_w + gap; R.y = base_y; R.w = col_w;
-            R.Begin(4);
-            {
-                float cy = R.Row(HDR);
-                PushAlpha(R.a);
-                if (!white_label)
-                    DrawIcon(dl, IC_HELMET, ImVec2(R.x + 26.0f, cy), 17.0f, Accent(1.0f), 1.5f);
-                const float text_x = white_label ? R.x + pad : R.x + 42.0f;
-                TextAt(dl, F_Title, ImVec2(text_x, cy - Measure(F_Title, pstra("Safety & Recovery")).y * 0.5f), C.text, pstra("Safety & Recovery"));
-                PopAlpha();
-            }
-            CardSlider(R, pstra("Rest HP %"), pstra("##bot_rest_hp"), &botCfg.RestHpThresholdPercent, 10.0f, 80.0f, pstra("%.0f%%"));
-            RowToggle(R, pstra("Quest Mobs Only"), pstra("##bot_questonly"), &botCfg.QuestMonstersOnly, pstra("Ataca apenas monstros de missoes"));
-            {
-                float cy = R.Row(ROW);
-                char statBuf[64];
-                snprintf(statBuf, sizeof(statBuf), pstra("Kills: %u | Looted: %u"), ShaiyaOverlay::GrindBot::GetStats().MonstersKilled, ShaiyaOverlay::GrindBot::GetStats().ItemsLooted);
-                RowLabel(dl, R.x, R.w, cy, pstra("Session Stats"), R.a);
-                TextRight(dl, F_Small, ImVec2(R.x + R.w - ACardPadding(), cy - Measure(F_Small, statBuf).y * 0.5f), C.text_mute, statBuf);
-            }
-
-            content_h = ImMax(content_h, R.y - base_y);
+            float cy = R.Row(ROW);
+            RowLabel(dl, R.x, R.w, cy, pstra("Combat Automation"), R.a, pstra("Rotation triggers when bot engages"));
+            TextRight(dl, F_Small, ImVec2(R.x + R.w - ACardPadding(), cy - Measure(F_Small, pstra("Active in Combat")).y * 0.5f), Accent(1.0f), pstra("Active in Combat"));
         }
+
+        content_h = ImMax(content_h, R.y - base_y);
     }
 
     dl->PopClipRect();
