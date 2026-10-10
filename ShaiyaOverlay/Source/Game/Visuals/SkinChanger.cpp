@@ -1,8 +1,10 @@
 #include "SkinChanger.h"
 #include "Core/Logger.h"
 #include "Core/Memory.h"
+#include "Core/StringUtils.h"
 #include "Game/GameOffsets.h"
 #include <windows.h>
+#include <vector>
 
 namespace ShaiyaOverlay
 {
@@ -328,6 +330,8 @@ namespace ShaiyaOverlay
 
     void SkinChanger::Update()
     {
+        EnsureSkinCatalogLoaded();
+
         static bool WasEnabled = false;
         if (Config.Enabled)
         {
@@ -347,5 +351,103 @@ namespace ShaiyaOverlay
             RestoreOriginal();
             WasEnabled = false;
         }
+    }
+
+    static std::vector<SkinItemInfo> s_availableCostumes;
+    static std::vector<SkinItemInfo> s_availableWings;
+    static bool s_skinCatalogLoaded = false;
+
+    void SkinChanger::EnsureSkinCatalogLoaded()
+    {
+        if (s_skinCatalogLoaded)
+            return;
+
+        if (!Offsets.GetItemRecordAddr || !Offsets.ItemDb)
+            return;
+
+        using GetItemRecordFn = U64(__fastcall*)(U64 ItemDb, U8 Type, U32 TypeId);
+        auto Fn = reinterpret_cast<GetItemRecordFn>(Offsets.GetItemRecordAddr);
+
+        s_availableCostumes.clear();
+        s_availableWings.clear();
+
+        // Scan Costumes (Type 150)
+        for (U32 id = 1; id <= 255; ++id)
+        {
+            __try
+            {
+                U64 rec = Fn(Offsets.ItemDb, 150, id);
+                if (rec)
+                {
+                    U64 namePtr = 0;
+                    if (Memory::ReadSafe(rec, &namePtr) && namePtr > 0x10000)
+                    {
+                        char tempName[64] = { 0 };
+                        if (Memory::ReadBytesSafe(namePtr, tempName, sizeof(tempName) - 1))
+                        {
+                            tempName[sizeof(tempName) - 1] = '\0';
+                            if (tempName[0] != '\0')
+                            {
+                                SkinItemInfo item;
+                                item.TypeId = static_cast<U8>(id);
+                                StringUtils::Copy(item.Name, tempName, sizeof(item.Name));
+                                StringUtils::NormalizeAccents(item.Name, sizeof(item.Name), false);
+                                s_availableCostumes.push_back(item);
+                            }
+                        }
+                    }
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+
+        // Scan Wings (Type 121)
+        for (U32 id = 1; id <= 255; ++id)
+        {
+            __try
+            {
+                U64 rec = Fn(Offsets.ItemDb, 121, id);
+                if (rec)
+                {
+                    U64 namePtr = 0;
+                    if (Memory::ReadSafe(rec, &namePtr) && namePtr > 0x10000)
+                    {
+                        char tempName[64] = { 0 };
+                        if (Memory::ReadBytesSafe(namePtr, tempName, sizeof(tempName) - 1))
+                        {
+                            tempName[sizeof(tempName) - 1] = '\0';
+                            if (tempName[0] != '\0')
+                            {
+                                SkinItemInfo item;
+                                item.TypeId = static_cast<U8>(id);
+                                StringUtils::Copy(item.Name, tempName, sizeof(item.Name));
+                                StringUtils::NormalizeAccents(item.Name, sizeof(item.Name), false);
+                                s_availableWings.push_back(item);
+                            }
+                        }
+                    }
+                }
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
+        }
+
+        if (!s_availableCostumes.empty() || !s_availableWings.empty())
+        {
+            s_skinCatalogLoaded = true;
+            Logger::Info("[SkinChanger] Catalog loaded: %zu costumes (Type 150), %zu wings (Type 121).",
+                s_availableCostumes.size(), s_availableWings.size());
+        }
+    }
+
+    const std::vector<SkinItemInfo>& SkinChanger::GetAvailableCostumes()
+    {
+        EnsureSkinCatalogLoaded();
+        return s_availableCostumes;
+    }
+
+    const std::vector<SkinItemInfo>& SkinChanger::GetAvailableWings()
+    {
+        EnsureSkinCatalogLoaded();
+        return s_availableWings;
     }
 }

@@ -1,9 +1,16 @@
 #pragma once
 
 #include "Core/Types.h"
+#include <vector>
 
 namespace ShaiyaOverlay
 {
+    struct SkinItemInfo
+    {
+        U8 TypeId = 0;
+        char Name[64] = { 0 };
+    };
+
     struct EquipmentVisualSlot
     {
         bool Override = false;
@@ -79,6 +86,10 @@ namespace ShaiyaOverlay
         static void SetGlowPreset(int glowLevel);
         static void SetArmorPreset(int presetIndex);
         static U64 GetLocalPlayerCharacterPtr();
+
+        static const std::vector<SkinItemInfo>& GetAvailableCostumes();
+        static const std::vector<SkinItemInfo>& GetAvailableWings();
+        static void EnsureSkinCatalogLoaded();
 
     private:
         static SkinChangerConfig Config;
